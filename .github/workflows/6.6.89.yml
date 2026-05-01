@@ -84,8 +84,6 @@ on:
         default: false
         type: boolean
 
-      # image_upload_password 输入已删除，改用 Secret
-
 jobs:
   build:
     name: Build_${{ github.event.inputs.device_name }}_${{ github.event.inputs.ksu_type }}
@@ -111,7 +109,7 @@ jobs:
 
       - name: ⚙️ Set REPO_MANIFEST (设置对应机型配置文件)
         run: |
-          case "${{ env.DEVICES_NAME }}" in
+          case "$DEVICES_NAME" in
             oneplus_ace5_pro)
               echo "REPO_MANIFEST=sm8750_b_16.0.0_oneplus_ace5_pro" >> $GITHUB_ENV
               echo "SCHED_FILE=oneplus_ace5_pro_b" >> $GITHUB_ENV ;;
@@ -143,8 +141,10 @@ jobs:
               echo "IMAGENAME=Image_Rm_GT_8" >> $GITHUB_ENV
               echo "SCHED_FILE=oneplus_ace_6" >> $GITHUB_ENV ;;
           esac
-          if [ -z "zenv.CUSTOM_KERNEL_SUFFIX" ]; then
-            case "zenv.DEVICES_NAME" in
+
+          # 内核后缀
+          if [ -z "$CUSTOM_KERNEL_SUFFIX" ]; then
+            case "$DEVICES_NAME" in
              oneplus_pad_2_pro) DEFAULT_SUFFIX='-android15-8-g096cdb6ecefc-ab14358676-4k' ;;
              oneplus_ace5_ultra) DEFAULT_SUFFIX='-android15-8-ge6068c2aa11d-abogki454747580-4k' ;;
              oneplus_13 | oneplus_13t | oneplus_ace5_pro | oneplus_ace_6 | realme_GT7 | realme_GT7pro_Speed | realme_GT8) DEFAULT_SUFFIX='-android15-8-g7e1f3c083cc6-abogki467167594-4k' ;;
@@ -153,14 +153,16 @@ jobs:
             echo "DEFAULT_SUFFIX=$DEFAULT_SUFFIX" >> $GITHUB_ENV
             echo "使用原官核名称：$DEFAULT_SUFFIX"
           else
-            if [[ "zenv.CUSTOM_KERNEL_SUFFIX" != -* ]]; then
+            if [[ "$CUSTOM_KERNEL_SUFFIX" != -* ]]; then
               echo "::warning::自定义内核名称请以 - 开头"
             fi
-            echo "使用自定义名称: zenv.CUSTOM_KERNEL_SUFFIX"
-            echo "DEFAULT_SUFFIX=zenv.CUSTOM_KERNEL_SUFFIX" >> $GITHUB_ENV
+            echo "使用自定义名称: $CUSTOM_KERNEL_SUFFIX"
+            echo "DEFAULT_SUFFIX=$CUSTOM_KERNEL_SUFFIX" >> $GITHUB_ENV
           fi
-          if [ -z "zenv.CUSTOM_KERNEL_TIME" ]; then
-            case "zenv.DEVICES_NAME" in
+
+          # 内核时间
+          if [ -z "$CUSTOM_KERNEL_TIME" ]; then
+            case "$DEVICES_NAME" in
               oneplus_pad_2_pro) KERNEL_TIME='Tue Oct 28 09:04:21 UTC 2025' ;;
               oneplus_ace5_ultra) KERNEL_TIME='Tue Jul 1 19:48:18 UTC 2025' ;;
               oneplus_13 | oneplus_13t | oneplus_ace5_pro | oneplus_ace_6 | realme_GT7 | realme_GT7pro_Speed | realme_GT8) KERNEL_TIME='Mon Dec 8 04:00:43 UTC 2025' ;;
@@ -169,8 +171,8 @@ jobs:
             echo "KERNEL_TIME=$KERNEL_TIME" >> $GITHUB_ENV
             echo "使用官核时间：$KERNEL_TIME"
           else
-            echo "使用自定义构建时间: zenv.CUSTOM_KERNEL_TIME"
-            echo "KERNEL_TIME=zenv.CUSTOM_KERNEL_TIME" >> $GITHUB_ENV
+            echo "使用自定义构建时间: $CUSTOM_KERNEL_TIME"
+            echo "KERNEL_TIME=$CUSTOM_KERNEL_TIME" >> $GITHUB_ENV
           fi
 
       - name: 🛠 Install dependencies and Initialize repo and sync
@@ -187,10 +189,10 @@ jobs:
           wget https://github.com/cctv18/oppo_oplus_realme_sm8750/raw/refs/heads/main/lib/ccache-x86-64 -O ccache
           sudo cp -f ./ccache /usr/bin/ccache && sudo chmod +x /usr/bin/ccache && rm -f ./ccache
           echo "正在克隆源码仓库..."
-          if [ "zenv.DEVICES_NAME" = "realme_GT7pro" ] || [ "zenv.DEVICES_NAME" = "realme_GT7pro_Speed" ] || [ "zenv.DEVICES_NAME" = "realme_GT8" ]; then
+          if [ "$DEVICES_NAME" = "realme_GT7pro" ] || [ "$DEVICES_NAME" = "realme_GT7pro_Speed" ] || [ "$DEVICES_NAME" = "realme_GT8" ]; then
             aria2c -s16 -x16 -k1M https://github.com/realme-kernel-opensource/realme_GT8-AndroidB-common-source/archive/refs/heads/master.zip -o common.zip
             unzip -q common.zip && mv realme_GT8-AndroidB-common-source-master common && rm -rf common.zip
-          elif [ "zenv.DEVICES_NAME" = "oneplus_ace5_ultra" ] || [ "zenv.DEVICES_NAME" = "realme_GT7" ]; then
+          elif [ "$DEVICES_NAME" = "oneplus_ace5_ultra" ] || [ "$DEVICES_NAME" = "realme_GT7" ]; then
             aria2c -s16 -x16 -k1M https://github.com/OnePlusOSS/android_kernel_oneplus_mt6991/archive/refs/heads/oneplus/${REPO_MANIFEST}.zip -o common.zip
             unzip -q common.zip && mv android_kernel_oneplus_mt6991-oneplus-${REPO_MANIFEST} common && rm -rf common.zip
           else
@@ -208,7 +210,7 @@ jobs:
 
       - name: 🛠 Set ccache DIR
         run: |
-          echo "CCACHE_DIR=$HOME/.ccache_${{ env.KSU_TYPE }}_${{ env.DEVICES_NAME }}" >> $GITHUB_ENV
+          echo "CCACHE_DIR=$HOME/.ccache_${KSU_TYPE}_${DEVICES_NAME}" >> $GITHUB_ENV
           echo "CCACHE_MAXSIZE=10G" >> $GITHUB_ENV
           df -h
 
@@ -290,7 +292,7 @@ jobs:
 
       - name: 📥 Init ccache
         run: |
-          export CCACHE_DIR="zenv.CCACHE_DIR" CCACHE_MAXSIZE="zenv.CCACHE_MAXSIZE"
+          export CCACHE_DIR="$CCACHE_DIR" CCACHE_MAXSIZE="$CCACHE_MAXSIZE"
           mkdir -p "$CCACHE_DIR"
           ccache -M "$CCACHE_MAXSIZE"
           ccache -o compression=true
@@ -388,7 +390,7 @@ jobs:
       - name: ⚙️ Set KSU
         run: |
           cd kernel_workspace
-          if [ "${{ env.KSU_TYPE }}" == 'ReSukiSU' ]; then
+          if [ "$KSU_TYPE" == 'ReSukiSU' ]; then
             curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/refs/heads/main/kernel/setup.sh" | bash -s main
             cd ./KernelSU
             KSU_VERSION=$(expr $(git rev-list --count main) + 30700 2>/dev/null || echo 114514)
@@ -425,10 +427,10 @@ jobs:
           cd kernel_workspace
           echo "CONFIG_KSU=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KPM=y" >> ./common/arch/arm64/configs/gki_defconfig
-          if [ "${{ env.KSU_TYPE }}" == 'ReSukiSU' ]; then
+          if [ "$KSU_TYPE" == 'ReSukiSU' ]; then
             echo 'CONFIG_KSU_FULL_NAME_FORMAT="%TAG_NAME%-%COMMIT_SHA%-Re-TG@qdykernel"' >> ./common/arch/arm64/configs/gki_defconfig
           fi
-          if [ "${{ env.ENABLE_SUSFS }}" == 'true' ]; then
+          if [ "$ENABLE_SUSFS" == 'true' ]; then
             echo "CONFIG_KSU_SUSFS=y" >> ./common/arch/arm64/configs/gki_defconfig
             echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
             echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> ./common/arch/arm64/configs/gki_defconfig
@@ -461,17 +463,17 @@ jobs:
         run: |
           if [ "$SCHED_FILE" = "none" ]; then
             echo "该机型自带风驰，跳过所有补丁应用"
-          elif [ "${{ env.ENABLE_SCX }}" = "true" ]; then
+          elif [ "$ENABLE_SCX" = "true" ]; then
             cd kernel_workspace/common
-            if [zenv.DEVICES_NAME = "oneplus_ace5_ultra" ] || [zenv.DEVICES_NAME = "realme_GT7" ]; then
+            if [ "$DEVICES_NAME" = "oneplus_ace5_ultra" ] || [ "$DEVICES_NAME" = "realme_GT7" ]; then
               git clone https://github.com/Numbersf/SCHED_PATCH.git -b "mt6991"
             else
               git clone https://github.com/Numbersf/SCHED_PATCH.git -b "sm8750"
             fi
-            cp ./SCHED_PATCH/fengchi_${{ env.SCHED_FILE }}.patch ./
-            if [[ -f "fengchi_${{ env.SCHED_FILE }}.patch" ]]; then
-              dos2unix "fengchi_${{ env.SCHED_FILE }}.patch"
-              patch -p1 -F 3 < "fengchi_${{ env.SCHED_FILE }}.patch"
+            cp ./SCHED_PATCH/fengchi_${SCHED_FILE}.patch ./
+            if [[ -f "fengchi_${SCHED_FILE}.patch" ]]; then
+              dos2unix "fengchi_${SCHED_FILE}.patch"
+              patch -p1 -F 3 < "fengchi_${SCHED_FILE}.patch"
             else
               echo "❌ 未匹配到补丁"
               exit 11
@@ -502,7 +504,7 @@ jobs:
           export CCACHE_BASEDIR="${{ github.workspace }}"
           export CCACHE_NOHASHDIR="true"
           export CCACHE_NOHARDLINK="true"
-          export CCACHE_DIR="${{ env.CCACHE_DIR }}"
+          export CCACHE_DIR="$CCACHE_DIR"
           export CCACHE_MAXSIZE="3G"
           export CCACHE_IS_KERNEL_COMPILING="true"
           echo "sloppiness = file_stat_matches,include_file_ctime,include_file_mtime,pch_defines,file_macro,time_macros" >> "$CCACHE_DIR/ccache.conf"
@@ -616,7 +618,7 @@ jobs:
           name: AK3_${{ env.KSUVER }}_${{ env.DEVICES_NAME }}_${{ env.KSU_TYPE }}
           path: ./AnyKernel3/*
 
-      # ========== 镜像上传改用 Secret 验证 ==========
+      # 镜像上传改用 Secret 验证
       - name: 🔐 Check Image Upload Secret
         if: ${{ env.UPLOAD_IMAGE == 'true' }}
         run: |
@@ -694,7 +696,7 @@ jobs:
 
   create_release:
     name: 🚀 Publish GitHub Release
-    needs: [build, upload_rekernel]          # 等待 build 和 upload_rekernel 都完成
+    needs: [build, upload_rekernel]
     runs-on: ubuntu-latest
     if: ${{ ! failure() && ! cancelled() }}
     steps:
