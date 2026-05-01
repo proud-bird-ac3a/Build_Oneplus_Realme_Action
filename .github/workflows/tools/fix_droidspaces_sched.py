@@ -1,12 +1,8 @@
-#!/usr/bin/env python3
-import re, sys
+import re
 
-target = sys.argv[1] if len(sys.argv) > 1 else 'include/linux/sched.h'
-
-with open(target, 'r') as f:
+with open('include/linux/sched.h', 'r') as f:
     content = f.read()
 
-# 注释掉 #ifdef CONFIG_SYSVIPC 块内的 sysvsem 和 sysvshm
 lines = content.split('\n')
 new_lines = []
 in_block = False
@@ -22,7 +18,6 @@ for line in lines:
         new_lines.append(line)
 content = '\n'.join(new_lines)
 
-# 替换 ANDROID_KABI_RESERVE(1);...(2);...(3); 序列为条件结构
 pattern = r'(ANDROID_KABI_RESERVE\(1\);\s*\n\s*ANDROID_KABI_RESERVE\(2\);\s*\n\s*ANDROID_KABI_RESERVE\(3\);)'
 replacement = (
     '#ifdef CONFIG_SYSVIPC\n'
@@ -36,7 +31,7 @@ replacement = (
 )
 content = re.sub(pattern, replacement, content)
 
-with open(target, 'w') as f:
+with open('include/linux/sched.h', 'w') as f:
     f.write(content)
 
-print('sched.h 已成功适配 Droidspaces kABI')
+print('sched.h Droidspaces 适配完成')
