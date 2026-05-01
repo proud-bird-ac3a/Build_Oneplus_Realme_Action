@@ -158,7 +158,6 @@ jobs:
             echo "DEFAULT_SUFFIX=$DEFAULT_SUFFIX" >> $GITHUB_ENV
             echo "使用原官核名称：$DEFAULT_SUFFIX"
           else
-              # 验证用户输入是否以 - 开头
               if [[ "${{ github.event.inputs.custom_kernel_suffix }}" != -* ]]; then
                 echo "::warning::自定义内核名称请以 - 开头"
                 echo "示例：-android15-8-g096cdb6ecefc-ab14358676-4k"
@@ -356,7 +355,6 @@ jobs:
       
       - name: 📥 Init ccache (初始化配置ccache)
         run: |
-          # 设置ccache环境变量
           export CCACHE_COMPILERCHECK="none"
           export CCACHE_BASEDIR="${{ github.workspace }}"
           export CCACHE_NOHASHDIR="true"
@@ -364,19 +362,15 @@ jobs:
           export CCACHE_DIR="${{ env.CCACHE_DIR }}"
           export CCACHE_MAXSIZE="${{ env.CCACHE_MAXSIZE }}"
           
-          # 确保ccache目录存在
           mkdir -p "$CCACHE_DIR"
           
-          # 每次运行都重新配置缓存大小
           echo "配置ccache缓存大小为: $CCACHE_MAXSIZE"
           ccache -M "$CCACHE_MAXSIZE"
           ccache -o compression=true
           
-          # 显示初始缓存状态
           echo "ccache初始状态:"
           ccache -s
           
-          # 如果缓存恢复命中，显示详细信息
           if [ -n "${{ steps.ccache-restore.outputs.cache-matched-key }}" ]; then
             echo "ccache缓存命中详情: ${{ steps.ccache-restore.outputs.cache-matched-key }}"
             ccache -sv
@@ -451,7 +445,6 @@ jobs:
         run: |
           echo "开始添加 Droidspaces 支持..."
           
-          # 下载 kABI 安全补丁（6.6 内核使用 below-kernel-6.12）
           PATCH_URL="https://raw.githubusercontent.com/ravindu644/Droidspaces-OSS/main/Documentation/resources/kernel-patches/GKI/below-kernel-6.12/001.GKI-below-6.12-fix_sysvipc_kabi_1_2_3.patch"
           wget -O droidspaces_kabi.patch "${PATCH_URL}" || {
             echo "::error::下载 Droidspaces kABI 补丁失败"
@@ -519,7 +512,6 @@ jobs:
           echo "CONFIG_BBG=y" >> ./common/arch/arm64/configs/gki_defconfig
           sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/lockdown/lockdown,baseband_guard/ } }' ./common/security/Kconfig
 
-          
       - name: ⚙️ Set ${{ env.KSU_TYPE }} (设置${{ env.KSU_TYPE }})
         run: |
           cd kernel_workspace
@@ -563,7 +555,6 @@ jobs:
             echo "SukiSU版本号: v${KSU_API_VERSION}-${GIT_COMMIT_HASH}-TG@qdykernel"
           fi
 
-            
       - name: 🔧 Set up SUSFS (配置 SUSFS)
         if: ${{ env.ENABLE_SUSFS == 'true' }}
         run: |
@@ -578,7 +569,6 @@ jobs:
           patch -p1 -N -F 3 < 69_hide_stuff.patch || true
           echo "[OK] SUSFS 补丁处理流程全部完成"
 
-          
       - name: 🔧 Set gki_defconfig (设置编译配置) 
         run: |
           cd kernel_workspace
@@ -614,7 +604,6 @@ jobs:
 
           echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> ./common/arch/arm64/configs/gki_defconfig
           
-          #Remove check_defconfig
           sudo sed -i 's/check_defconfig//' ./common/build.config.gki
 
       - name: 🔧 Set Kernel name (设置内核名称)
@@ -656,9 +645,11 @@ jobs:
             patch -p1 -F 3 < hmbird_patch.patch
             echo "OGKI转换GKI_patch完成"
           fi
+
       - name: 📥 Start build timer (构建计时开始)
         run: 
           echo "BUILD_START=$(date +%s)" >> $GITHUB_ENV
+
 
       - name: 🔨 Build Kernel (构建内核)
         run: |
@@ -784,152 +775,151 @@ jobs:
 
             core.info(`旧缓存清理完成，共删除 ${deleted} 个缓存`);
 
-    - name: 📦 Make AnyKernel3 (创建Anykernel3)
-      working-directory: kernel_workspace    # 关键：确保在正确目录下执行
-      run: |
-        cp "${GITHUB_WORKSPACE}/.github/workflows/tools/main.bin" ./
-        chmod +x main.bin
-        ./main.bin "make_anykernel3"
-        rm -rf ./main.bin
-        
-    - name: 📤 Upload AnyKernel3 (上传 Anykernel3)
-      uses: actions/upload-artifact@v5
-      with:
-       name: AK3_${{ env.KSUVER }}_${{ env.DEVICES_NAME }}_${{ env.KSU_TYPE }}
-       # 注意：main.bin 会把产物放在 AnyKernel3 子目录下
-       path: kernel_workspace/AnyKernel3/*
+      # ==================== 修复后的打包步骤 ====================
+      - name: 📦 Make AnyKernel3 (创建Anykernel3)
+        working-directory: kernel_workspace
+        run: |
+          cp "${GITHUB_WORKSPACE}/.github/workflows/tools/main.bin" ./
+          chmod +x main.bin
+          ./main.bin "make_anykernel3"
+          rm -rf ./main.bin
+          
+      - name: 📤 Upload AnyKernel3 (上传 Anykernel3)
+        uses: actions/upload-artifact@v5
+        with:
+         name: AK3_${{ env.KSUVER }}_${{ env.DEVICES_NAME }}_${{ env.KSU_TYPE }}
+         path: kernel_workspace/AnyKernel3/*
+      # ==================== 修复结束 ====================
 
-upload_rekernel:
-  name: Upload Re-Kernel Module
-  if: ${{ github.event.inputs.enable_ReKernel == 'true' }}
-  needs: build
-  runs-on: ubuntu-latest
-  steps:
-    - name: 🔎 Find Re-Kernel module zip (查找Re-Kernel最新模块并下载)
-      id: download-rekernel
-      uses: actions/github-script@v8
-      env:
-        KERNEL_MAJOR: "6.6"
-      with:
-        script: |
-          const owner = 'Sakion-Team';
-          const repo = 'Re-Kernel';
-          const kernelMajor = process.env.KERNEL_MAJOR;
+  upload_rekernel:
+    name: Upload Re-Kernel Module
+    if: ${{ github.event.inputs.enable_ReKernel == 'true' }}
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🔎 Find Re-Kernel module zip (查找Re-Kernel最新模块并下载)
+        id: download-rekernel
+        uses: actions/github-script@v8
+        env:
+          KERNEL_MAJOR: "6.6"
+        with:
+          script: |
+            const owner = 'Sakion-Team';
+            const repo = 'Re-Kernel';
+            const kernelMajor = process.env.KERNEL_MAJOR;
 
-          core.info(`正在获取 ${owner}/${repo} 的最新 release...`);
+            core.info(`正在获取 ${owner}/${repo} 的最新 release...`);
 
-          const release = await github.rest.repos.getLatestRelease({
-            owner,
-            repo,
-          });
-          core.info(`最新版本: ${release.data.tag_name}`);
-          const escapedKernel = kernelMajor.replace(/\./g, '\\.');
-          const pattern66 = new RegExp(`^Re-Kernel-v([\\d.]+)-${escapedKernel}\\.zip$`);
-          const patternAny = new RegExp(`^Re-Kernel.*\\.zip$`, 'i');
+            const release = await github.rest.repos.getLatestRelease({
+              owner,
+              repo,
+            });
+            core.info(`最新版本: ${release.data.tag_name}`);
+            const escapedKernel = kernelMajor.replace(/\./g, '\\.');
+            const pattern66 = new RegExp(`^Re-Kernel-v([\\d.]+)-${escapedKernel}\\.zip$`);
+            const patternAny = new RegExp(`^Re-Kernel.*\\.zip$`, 'i');
 
-          let targetAsset = null;
-          let versionNumber = '';
-          let isExactMatch = false;
+            let targetAsset = null;
+            let versionNumber = '';
+            let isExactMatch = false;
 
-          for (const asset of release.data.assets || []) {
-            const match = asset.name.match(pattern66);
-            if (match) {
-              targetAsset = asset;
-              versionNumber = match[1];
-              isExactMatch = true;
-              core.info(`找到精确匹配 6.6: ${asset.name}`);
-              break;
-            }
-          }
-
-          if (!targetAsset) {
-            core.info('未找到6.6版本，查找任意Re-Kernel模块...');
             for (const asset of release.data.assets || []) {
-              const match = asset.name.match(patternAny);
+              const match = asset.name.match(pattern66);
               if (match) {
                 targetAsset = asset;
-                versionNumber = asset.name.replace(/Re-Kernel-v|.zip/gi, '').replace(/^-/, '').replace(/-$/, '') || 'latest';
-                isExactMatch = false;
-                core.info(`找到Re-Kernel模块: ${asset.name}`);
+                versionNumber = match[1];
+                isExactMatch = true;
+                core.info(`找到精确匹配 6.6: ${asset.name}`);
                 break;
               }
             }
-          }
 
-          if (!targetAsset) {
-            core.setFailed('未找到任何 Re-Kernel 模块资产');
-            return;
-          }
+            if (!targetAsset) {
+              core.info('未找到6.6版本，查找任意Re-Kernel模块...');
+              for (const asset of release.data.assets || []) {
+                const match = asset.name.match(patternAny);
+                if (match) {
+                  targetAsset = asset;
+                  versionNumber = asset.name.replace(/Re-Kernel-v|.zip/gi, '').replace(/^-/, '').replace(/-$/, '') || 'latest';
+                  isExactMatch = false;
+                  core.info(`找到Re-Kernel模块: ${asset.name}`);
+                  break;
+                }
+              }
+            }
 
-          core.info(`找到目标资产: ${targetAsset.name} (版本: ${versionNumber}, ${(targetAsset.size / 1024).toFixed(1)} KB)`);
-          core.setOutput('asset-name', targetAsset.name);
-          core.setOutput('download-url', targetAsset.browser_download_url);
-          core.setOutput('version-number', versionNumber);
+            if (!targetAsset) {
+              core.setFailed('未找到任何 Re-Kernel 模块资产');
+              return;
+            }
 
-    - name: 📥 Download Re-Kernel module (下载 Re-Kernel 模块)
-      env:
-        ASSET_NAME: ${{ steps.download-rekernel.outputs.asset-name }}
-        DOWNLOAD_URL: ${{ steps.download-rekernel.outputs.download-url }}
-        VERSION_NUMBER: ${{ steps.download-rekernel.outputs.version-number }}
-      run: |
-        set -euo pipefail
-        ARTIFACT_NAME="Re-Kernel-v${VERSION_NUMBER}"
-        echo "正在下载 Re-Kernel 模块: $ASSET_NAME"
-        echo "下载地址: $DOWNLOAD_URL"
-        echo "Artifact 名称: $ARTIFACT_NAME"
-        aria2c -s16 -x16 -k1M "$DOWNLOAD_URL" -o "$ASSET_NAME"
-        echo "✓ Re-Kernel 模块下载完成"
-        ls -lh "$ASSET_NAME"
-        echo "正在创建目录 $ARTIFACT_NAME 并解压模块..."
-        mkdir -p "$ARTIFACT_NAME"
-        unzip -q "$ASSET_NAME" -d "$ARTIFACT_NAME"
-        echo "✓ 目录结构:"
-        ls -lR "$ARTIFACT_NAME"
+            core.info(`找到目标资产: ${targetAsset.name} (版本: ${versionNumber}, ${(targetAsset.size / 1024).toFixed(1)} KB)`);
+            core.setOutput('asset-name', targetAsset.name);
+            core.setOutput('download-url', targetAsset.browser_download_url);
+            core.setOutput('version-number', versionNumber);
 
-    - name: 📤 Upload Re-Kernel module (上传 Re-Kernel 模块)
-      uses: actions/upload-artifact@v5
-      with:
-        name: Re-Kernel-v${{ steps.download-rekernel.outputs.version-number }}
-        path: Re-Kernel-v${{ steps.download-rekernel.outputs.version-number }}
+      - name: 📥 Download Re-Kernel module (下载 Re-Kernel 模块)
+        env:
+          ASSET_NAME: ${{ steps.download-rekernel.outputs.asset-name }}
+          DOWNLOAD_URL: ${{ steps.download-rekernel.outputs.download-url }}
+          VERSION_NUMBER: ${{ steps.download-rekernel.outputs.version-number }}
+        run: |
+          set -euo pipefail
+          ARTIFACT_NAME="Re-Kernel-v${VERSION_NUMBER}"
+          echo "正在下载 Re-Kernel 模块: $ASSET_NAME"
+          echo "下载地址: $DOWNLOAD_URL"
+          echo "Artifact 名称: $ARTIFACT_NAME"
+          aria2c -s16 -x16 -k1M "$DOWNLOAD_URL" -o "$ASSET_NAME"
+          echo "✓ Re-Kernel 模块下载完成"
+          ls -lh "$ASSET_NAME"
+          echo "正在创建目录 $ARTIFACT_NAME 并解压模块..."
+          mkdir -p "$ARTIFACT_NAME"
+          unzip -q "$ASSET_NAME" -d "$ARTIFACT_NAME"
+          echo "✓ 目录结构:"
+          ls -lR "$ARTIFACT_NAME"
 
-# ---------------- 下面的自动发布作业，按需保留或删除 -----------------
-# 如果不需要自动发布 Release，可直接删除 create_release 整个 job。
-create_release:
-  name: 🚀 Publish GitHub Release
-  needs: [build, upload_rekernel]
-  runs-on: ubuntu-latest
-  if: ${{ ! failure() && ! cancelled() }}
-  steps:
-    - name: ⬇️ Download all artifacts
-      uses: actions/download-artifact@v5
-      with:
-        path: release-assets
+      - name: 📤 Upload Re-Kernel module (上传 Re-Kernel 模块)
+        uses: actions/upload-artifact@v5
+        with:
+          name: Re-Kernel-v${{ steps.download-rekernel.outputs.version-number }}
+          path: Re-Kernel-v${{ steps.download-rekernel.outputs.version-number }}
 
-    - name: 📋 Prepare release info
-      id: release-info
-      env:
-        DEVICE: ${{ github.event.inputs.device_name }}
-        KSU: ${{ github.event.inputs.ksu_type }}
-      run: |
-        TIMESTAMP=$(date -u +'%Y%m%d%H%M%S')
-        TAG="${DEVICE}-${KSU}-${TIMESTAMP}"
-        echo "tag=${TAG}" >> $GITHUB_OUTPUT
-        echo "release_name=${DEVICE} - ${KSU} (Build ${TIMESTAMP})" >> $GITHUB_OUTPUT
+  create_release:
+    name: 🚀 Publish GitHub Release
+    needs: [build, upload_rekernel]
+    runs-on: ubuntu-latest
+    if: ${{ ! failure() && ! cancelled() }}
+    steps:
+      - name: ⬇️ Download all artifacts
+        uses: actions/download-artifact@v5
+        with:
+          path: release-assets
 
-    - name: 🚀 Create Release and Upload Assets
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ steps.release-info.outputs.tag }}
-        name: ${{ steps.release-info.outputs.release_name }}
-        body: |
-          ### 构建详情
-          - **设备**: ${{ github.event.inputs.device_name }}
-          - **KSU 类型**: ${{ github.event.inputs.ksu_type }}
-          - **SUSFS**: ${{ github.event.inputs.enable_susfs }}
-          - **Re-Kernel**: ${{ github.event.inputs.enable_ReKernel }}
-          - **构建分支**: ${{ github.ref_name }}
-          - **运行编号**: ${{ github.run_id }}
-        files: |
-          release-assets/**/*
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: 📋 Prepare release info
+        id: release-info
+        env:
+          DEVICE: ${{ github.event.inputs.device_name }}
+          KSU: ${{ github.event.inputs.ksu_type }}
+        run: |
+          TIMESTAMP=$(date -u +'%Y%m%d%H%M%S')
+          TAG="${DEVICE}-${KSU}-${TIMESTAMP}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "release_name=${DEVICE} - ${KSU} (Build ${TIMESTAMP})" >> $GITHUB_OUTPUT
+
+      - name: 🚀 Create Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release-info.outputs.tag }}
+          name: ${{ steps.release-info.outputs.release_name }}
+          body: |
+            ### 构建详情
+            - **设备**: ${{ github.event.inputs.device_name }}
+            - **KSU 类型**: ${{ github.event.inputs.ksu_type }}
+            - **SUSFS**: ${{ github.event.inputs.enable_susfs }}
+            - **Re-Kernel**: ${{ github.event.inputs.enable_ReKernel }}
+            - **构建分支**: ${{ github.ref_name }}
+            - **运行编号**: ${{ github.run_id }}
+          files: |
+            release-assets/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
