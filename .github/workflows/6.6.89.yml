@@ -2,6 +2,7 @@ name: Build_oneplus_sm8750 Droidspaces
 permissions:
   contents: write
   actions: write
+
 on:
   workflow_dispatch:
     inputs:
@@ -78,15 +79,12 @@ on:
         type: boolean
 
       upload_image:
-        description: "上传内核镜像 (需要密码验证)"
+        description: "上传内核镜像 (需在仓库设置 IMAGE_UPLOAD_PWD Secret)"
         required: true
         default: false
         type: boolean
 
-      image_upload_password:
-        description: "🔒 请输入上传镜像的密码"
-        required: false
-        default: ''
+      # image_upload_password 输入已删除，改用 Secret
 
 jobs:
   build:
@@ -105,7 +103,7 @@ jobs:
       ENABLE_BBG:             ${{ github.event.inputs.enable_bbg }}
       ENABLE_DROIDSPACES:     ${{ github.event.inputs.enable_droidspaces }}
       UPLOAD_IMAGE:           ${{ github.event.inputs.upload_image }}
-      IMAGE_UPLOAD_PASSWORD:  ${{ github.event.inputs.image_upload_password }}
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -145,8 +143,8 @@ jobs:
               echo "IMAGENAME=Image_Rm_GT_8" >> $GITHUB_ENV
               echo "SCHED_FILE=oneplus_ace_6" >> $GITHUB_ENV ;;
           esac
-          if [ -z "${{ github.event.inputs.custom_kernel_suffix }}" ]; then
-            case "${{ env.DEVICES_NAME }}" in
+          if [ -z "zenv.CUSTOM_KERNEL_SUFFIX" ]; then
+            case "zenv.DEVICES_NAME" in
              oneplus_pad_2_pro) DEFAULT_SUFFIX='-android15-8-g096cdb6ecefc-ab14358676-4k' ;;
              oneplus_ace5_ultra) DEFAULT_SUFFIX='-android15-8-ge6068c2aa11d-abogki454747580-4k' ;;
              oneplus_13 | oneplus_13t | oneplus_ace5_pro | oneplus_ace_6 | realme_GT7 | realme_GT7pro_Speed | realme_GT8) DEFAULT_SUFFIX='-android15-8-g7e1f3c083cc6-abogki467167594-4k' ;;
@@ -155,14 +153,14 @@ jobs:
             echo "DEFAULT_SUFFIX=$DEFAULT_SUFFIX" >> $GITHUB_ENV
             echo "使用原官核名称：$DEFAULT_SUFFIX"
           else
-            if [[ "${{ github.event.inputs.custom_kernel_suffix }}" != -* ]]; then
+            if [[ "zenv.CUSTOM_KERNEL_SUFFIX" != -* ]]; then
               echo "::warning::自定义内核名称请以 - 开头"
             fi
-            echo "使用自定义名称: ${{ github.event.inputs.custom_kernel_suffix }}"
-            echo "DEFAULT_SUFFIX=${{ github.event.inputs.custom_kernel_suffix }}" >> $GITHUB_ENV
+            echo "使用自定义名称: zenv.CUSTOM_KERNEL_SUFFIX"
+            echo "DEFAULT_SUFFIX=zenv.CUSTOM_KERNEL_SUFFIX" >> $GITHUB_ENV
           fi
-          if [ -z "${{ github.event.inputs.custom_kernel_time }}" ]; then
-            case "${{ env.DEVICES_NAME }}" in
+          if [ -z "zenv.CUSTOM_KERNEL_TIME" ]; then
+            case "zenv.DEVICES_NAME" in
               oneplus_pad_2_pro) KERNEL_TIME='Tue Oct 28 09:04:21 UTC 2025' ;;
               oneplus_ace5_ultra) KERNEL_TIME='Tue Jul 1 19:48:18 UTC 2025' ;;
               oneplus_13 | oneplus_13t | oneplus_ace5_pro | oneplus_ace_6 | realme_GT7 | realme_GT7pro_Speed | realme_GT8) KERNEL_TIME='Mon Dec 8 04:00:43 UTC 2025' ;;
@@ -171,32 +169,42 @@ jobs:
             echo "KERNEL_TIME=$KERNEL_TIME" >> $GITHUB_ENV
             echo "使用官核时间：$KERNEL_TIME"
           else
-            echo "使用自定义构建时间: ${{ github.event.inputs.custom_kernel_time }}"
-            echo "KERNEL_TIME=${{ github.event.inputs.custom_kernel_time }}" >> $GITHUB_ENV
+            echo "使用自定义构建时间: zenv.CUSTOM_KERNEL_TIME"
+            echo "KERNEL_TIME=zenv.CUSTOM_KERNEL_TIME" >> $GITHUB_ENV
           fi
 
       - name: 🛠 Install dependencies and Initialize repo and sync
         run: |
+          set -euo pipefail
           rm -rf kernel_workspace
           mkdir kernel_workspace
           cd kernel_workspace
-          sudo apt-mark hold firefox && sudo apt-mark hold libc-bin && sudo apt purge man-db && sudo rm -rf /var/lib/man-db/auto-update && sudo apt update && sudo apt-get install -y --no-install-recommends binutils python-is-python3 libssl-dev libelf-dev dos2unix p7zip-full zstd &
-          wget https://github.com/cctv18/oppo_oplus_realme_sm8750/raw/refs/heads/main/lib/ccache-x86-64 -O ccache && sudo cp -f ./ccache /usr/bin/ccache && sudo chmod +x /usr/bin/ccache && rm -f ./ccache &
+          sudo apt-mark hold firefox && sudo apt-mark hold libc-bin
+          sudo apt purge -y man-db || true
+          sudo rm -rf /var/lib/man-db/auto-update
+          sudo apt update
+          sudo apt-get install -y --no-install-recommends binutils python-is-python3 libssl-dev libelf-dev dos2unix p7zip-full zstd aria2
+          wget https://github.com/cctv18/oppo_oplus_realme_sm8750/raw/refs/heads/main/lib/ccache-x86-64 -O ccache
+          sudo cp -f ./ccache /usr/bin/ccache && sudo chmod +x /usr/bin/ccache && rm -f ./ccache
           echo "正在克隆源码仓库..."
-          if [ "${DEVICES_NAME}" = "realme_GT7pro" ] || [ "${DEVICES_NAME}" = "realme_GT7pro_Speed" ] || [ "${DEVICES_NAME}" = "realme_GT8" ]; then
-            aria2c -s16 -x16 -k1M https://github.com/realme-kernel-opensource/realme_GT8-AndroidB-common-source/archive/refs/heads/master.zip -o common.zip && unzip -q common.zip && mv realme_GT8-AndroidB-common-source-master common
-          elif [ "${DEVICES_NAME}" = "oneplus_ace5_ultra" ] || [ "${DEVICES_NAME}" = "realme_GT7" ]; then
-            aria2c -s16 -x16 -k1M https://github.com/OnePlusOSS/android_kernel_oneplus_mt6991/archive/refs/heads/oneplus/${REPO_MANIFEST}.zip -o common.zip && unzip -q common.zip && mv android_kernel_oneplus_mt6991-oneplus-${REPO_MANIFEST} common
+          if [ "zenv.DEVICES_NAME" = "realme_GT7pro" ] || [ "zenv.DEVICES_NAME" = "realme_GT7pro_Speed" ] || [ "zenv.DEVICES_NAME" = "realme_GT8" ]; then
+            aria2c -s16 -x16 -k1M https://github.com/realme-kernel-opensource/realme_GT8-AndroidB-common-source/archive/refs/heads/master.zip -o common.zip
+            unzip -q common.zip && mv realme_GT8-AndroidB-common-source-master common && rm -rf common.zip
+          elif [ "zenv.DEVICES_NAME" = "oneplus_ace5_ultra" ] || [ "zenv.DEVICES_NAME" = "realme_GT7" ]; then
+            aria2c -s16 -x16 -k1M https://github.com/OnePlusOSS/android_kernel_oneplus_mt6991/archive/refs/heads/oneplus/${REPO_MANIFEST}.zip -o common.zip
+            unzip -q common.zip && mv android_kernel_oneplus_mt6991-oneplus-${REPO_MANIFEST} common && rm -rf common.zip
           else
-            aria2c -s16 -x16 -k1M https://github.com/OnePlusOSS/android_kernel_common_oneplus_sm8750/archive/refs/heads/oneplus/${REPO_MANIFEST}.zip -o common.zip && unzip -q common.zip && mv android_kernel_common_oneplus_sm8750-oneplus-${REPO_MANIFEST} common
+            aria2c -s16 -x16 -k1M https://github.com/OnePlusOSS/android_kernel_common_oneplus_sm8750/archive/refs/heads/oneplus/${REPO_MANIFEST}.zip -o common.zip
+            unzip -q common.zip && mv android_kernel_common_oneplus_sm8750-oneplus-${REPO_MANIFEST} common && rm -rf common.zip
           fi
-          rm -rf common.zip
-          mkdir -p clang18 && aria2c -s16 -x16 -k1M https://github.com/cctv18/oneplus_sm8650_toolchain/releases/download/LLVM-Clang18-r510928/clang-r510928.zip -o clang.zip && unzip -q clang.zip -d clang18 && rm -rf clang.zip &
-          aria2c -s16 -x16 -k1M https://github.com/cctv18/oneplus_sm8650_toolchain/releases/download/LLVM-Clang18-r510928/build-tools.zip -o build-tools.zip && unzip -q build-tools.zip && rm -rf build-tools.zip &
-          wait
+          mkdir -p clang18 && aria2c -s16 -x16 -k1M https://github.com/cctv18/oneplus_sm8650_toolchain/releases/download/LLVM-Clang18-r510928/clang-r510928.zip -o clang.zip && unzip -q clang.zip -d clang18 && rm -rf clang.zip
+          aria2c -s16 -x16 -k1M https://github.com/cctv18/oneplus_sm8650_toolchain/releases/download/LLVM-Clang18-r510928/build-tools.zip -o build-tools.zip && unzip -q build-tools.zip && rm -rf build-tools.zip
           echo "所有源码及工具链初始化完成！"
-          rm common/android/abi_gki_protected_exports_* || true
-          for f in common/scripts/setlocalversion; do sed -i 's/ -dirty//g' "$f"; sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' "$f"; done
+          rm -f common/android/abi_gki_protected_exports_* || true
+          for f in common/scripts/setlocalversion; do
+            sed -i 's/ -dirty//g' "$f"
+            sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' "$f"
+          done
 
       - name: 🛠 Set ccache DIR
         run: |
@@ -271,15 +279,18 @@ jobs:
           tar --use-compress-program=unzstd -xf "$PUBLIC_CACHE_ASSET" -C "$TEMP_EXTRACT_DIR"
           EXTRACTED_CCACHE_DIR="$(find "$TEMP_EXTRACT_DIR" -maxdepth 1 -mindepth 1 -type d -name '.ccache_*' | head -n 1)"
           mkdir -p "$CCACHE_DIR"
-          shopt -s dotglob nullglob
-          mv "$EXTRACTED_CCACHE_DIR"/* "$CCACHE_DIR"/
-          shopt -u dotglob nullglob
+          if [ -d "$EXTRACTED_CCACHE_DIR" ]; then
+            mv "$EXTRACTED_CCACHE_DIR"/* "$CCACHE_DIR"/
+            shopt -s dotglob nullglob
+            mv "$EXTRACTED_CCACHE_DIR"/.[!.]* "$CCACHE_DIR"/ 2>/dev/null || true
+            shopt -u dotglob nullglob
+          fi
           rm -rf "$TEMP_EXTRACT_DIR"
           echo "PUBLIC_CCACHE_USED=true" >> "$GITHUB_ENV"
 
       - name: 📥 Init ccache
         run: |
-          export CCACHE_DIR="${{ env.CCACHE_DIR }}" CCACHE_MAXSIZE="${{ env.CCACHE_MAXSIZE }}"
+          export CCACHE_DIR="zenv.CCACHE_DIR" CCACHE_MAXSIZE="zenv.CCACHE_MAXSIZE"
           mkdir -p "$CCACHE_DIR"
           ccache -M "$CCACHE_MAXSIZE"
           ccache -o compression=true
@@ -291,11 +302,13 @@ jobs:
           cd kernel_workspace
           VERSION=$(awk -F'=' '/^VERSION[ \t]*=/ {gsub(/ /,"",$2); print $2}' common/Makefile)
           PATCHLEVEL=$(awk -F'=' '/^PATCHLEVEL[ \t]*=/ {gsub(/ /,"",$2); print $2}' common/Makefile)
-          [ ! -d "Re-Kernel" ] && git clone --depth 1 https://github.com/Sakion-Team/Re-Kernel.git
+          if [ ! -d "Re-Kernel" ]; then
+            git clone --depth 1 https://github.com/Sakion-Team/Re-Kernel.git
+          fi
           RE_DIR="${GITHUB_WORKSPACE}/kernel_workspace/Re-Kernel/LKM-Source"
           cd common
           grep -q 'source "drivers/rekernel/Kconfig"' drivers/Kconfig || sed -i '/endmenu/i source "drivers/rekernel/Kconfig"' drivers/Kconfig
-          grep -q 'obj-$(CONFIG_REKERNEL)' drivers/Makefile || printf '\n# Re-Kernel\nobj-$(CONFIG_REKERNEL) += rekernel/\n' >> drivers/Makefile
+          grep -q 'obj-\$(CONFIG_REKERNEL)' drivers/Makefile || printf '\n# Re-Kernel\nobj-\$(CONFIG_REKERNEL) += rekernel/\n' >> drivers/Makefile
           mkdir -p drivers/rekernel
           cp ${RE_DIR}/* drivers/rekernel/
           TARGET="KERNEL_${VERSION}_${PATCHLEVEL}"
@@ -311,11 +324,15 @@ jobs:
         if: ${{ env.ENABLE_ADIOS == 'true' }}
         working-directory: kernel_workspace/common
         run: |
+          set -euo pipefail
           PATCH_FILE="${GITHUB_WORKSPACE}/.github/workflows/tools/adios_ioscheduler_6.6.patch"
-          [ ! -f "$PATCH_FILE" ] && exit 1
+          if [ ! -f "$PATCH_FILE" ]; then
+            echo "::error::ADIOS 补丁文件不存在: $PATCH_FILE"
+            exit 1
+          fi
           if [ ! -f "block/adios.c" ]; then
             cp "$PATCH_FILE" ./adios_ioscheduler_6.6.patch
-            patch -p1 --ignore-whitespace -F 3 < adios_ioscheduler_6.6.patch || patch -p1 --force --ignore-whitespace < adios_ioscheduler_6.6.patch || true
+            patch -p1 --ignore-whitespace -F 3 < adios_ioscheduler_6.6.patch || { echo "::error::ADIOS 补丁应用失败"; exit 1; }
             rm -f adios_ioscheduler_6.6.patch
           fi
           grep -q "CONFIG_MQ_IOSCHED_ADIOS" arch/arm64/configs/gki_defconfig || {
@@ -323,41 +340,30 @@ jobs:
             echo "CONFIG_MQ_IOSCHED_DEFAULT_ADIOS=y" >> arch/arm64/configs/gki_defconfig
           }
 
-      # ========== Droidspaces 适配（使用官方补丁） ==========
       - name: 🔧 Add Droidspaces Support
         if: ${{ env.ENABLE_DROIDSPACES == 'true' }}
         working-directory: kernel_workspace/common
         run: |
           echo "开始添加 Droidspaces 支持..."
-
-          # 1. 设置必要的内核配置选项
           CONFIGS=(
-            # 基础和 IPC 支持
             CONFIG_SYSVIPC=y CONFIG_POSIX_MQUEUE=y
-            # 命名空间支持
             CONFIG_IPC_NS=y CONFIG_PID_NS=y
-            # 设备支持
             CONFIG_DEVTMPFS=y
-            # 网络与防火墙 (UFW/Fail2ban)
             CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y
             CONFIG_NETFILTER_XT_TARGET_REJECT=y
             CONFIG_NETFILTER_XT_TARGET_LOG=y
             CONFIG_NETFILTER_XT_MATCH_RECENT=y
             CONFIG_IP_SET=y CONFIG_IP_SET_HASH_IP=y CONFIG_IP_SET_HASH_NET=y CONFIG_NETFILTER_XT_SET=y
           )
-
           DEFCONFIG=arch/arm64/configs/gki_defconfig
           for cfg in "${CONFIGS[@]}"; do
             key="${cfg%%=*}"
-            # 先移除可能存在的旧项，再添加新项，防止重复
             sed -i "/^${key}=/d; /^# ${key} is not set/d" "$DEFCONFIG"
             echo "$cfg" >> "$DEFCONFIG"
           done
-
-          # 2. 应用 kABI 友好补丁
           echo "正在下载并应用官方 KABI 修复补丁..."
           wget -O droidspaces.patch https://raw.githubusercontent.com/ravindu644/Droidspaces-OSS/main/Documentation/resources/kernel-patches/GKI/below-kernel-6.12/001.GKI-below-6.12-fix_sysvipc_kabi_1_2_3.patch
-          git apply --whitespace=nowarn droidspaces.patch || true
+          patch -p1 --ignore-whitespace < droidspaces.patch || { echo "::error::Droidspaces 补丁应用失败"; exit 1; }
           echo "✓ Droidspaces 支持配置完成"
 
       - name: 🔧 apply lz4 & zstd patches
@@ -368,8 +374,8 @@ jobs:
           cp ./oppo_oplus_realme_sm8750/zram_patch/lz4armv8.S ./common/lib
           cp ./oppo_oplus_realme_sm8750/zram_patch/002-zstd.patch ./common/
           cd ./common
-          git apply -p1 < 001-lz4.patch || true
-          patch -p1 < 002-zstd.patch || true
+          patch -p1 < 001-lz4.patch || { echo "::error::LZ4 补丁应用失败"; exit 1; }
+          patch -p1 < 002-zstd.patch || { echo "::error::Zstd 补丁应用失败"; exit 1; }
 
       - name: 🔧 Set Baseband-guard
         if: ${{ env.ENABLE_BBG == 'true' }}
@@ -411,8 +417,8 @@ jobs:
           cp ./susfs4ksu/kernel_patches/fs/* ./common/fs/
           cp ./susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
           cd ./common
-          patch -p1 < 50_add_susfs_in_gki-android15-6.6.patch || true
-          patch -p1 -N -F 3 < 69_hide_stuff.patch || true
+          patch -p1 < 50_add_susfs_in_gki-android15-6.6.patch || { echo "::error::SUSFS 基础补丁应用失败"; exit 1; }
+          patch -p1 -N -F 3 < 69_hide_stuff.patch || { echo "::error::SUSFS 隐藏补丁应用失败"; exit 1; }
 
       - name: 🔧 Set gki_defconfig
         run: |
@@ -442,13 +448,13 @@ jobs:
           echo "CONFIG_TMPFS_XATTR=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_TMPFS_POSIX_ACL=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> ./common/arch/arm64/configs/gki_defconfig
-          sudo sed -i 's/check_defconfig//' ./common/build.config.gki
+          sed -i 's/check_defconfig//' ./common/build.config.gki
 
       - name: 🔧 Set Kernel name
         run: |
           cd kernel_workspace
           ESCAPED_SUFFIX=$(printf '%s\n' "$DEFAULT_SUFFIX" | sed 's:[\/&]:\\&:g')
-          sudo sed -i "s/-4k/$ESCAPED_SUFFIX/g" ./common/arch/arm64/configs/gki_defconfig
+          sed -i "s/-4k/$ESCAPED_SUFFIX/g" ./common/arch/arm64/configs/gki_defconfig
           sed -i 's/${scm_version}//' ./common/scripts/setlocalversion
 
       - name: 🔧 Apply Sched Patch
@@ -457,15 +463,15 @@ jobs:
             echo "该机型自带风驰，跳过所有补丁应用"
           elif [ "${{ env.ENABLE_SCX }}" = "true" ]; then
             cd kernel_workspace/common
-            if [ "${DEVICES_NAME}" = "oneplus_ace5_ultra" ] || [ "${DEVICES_NAME}" = "realme_GT7" ]; then
+            if [zenv.DEVICES_NAME = "oneplus_ace5_ultra" ] || [zenv.DEVICES_NAME = "realme_GT7" ]; then
               git clone https://github.com/Numbersf/SCHED_PATCH.git -b "mt6991"
             else
               git clone https://github.com/Numbersf/SCHED_PATCH.git -b "sm8750"
             fi
-            cp ./SCHED_PATCH/fengchi_${{env.SCHED_FILE}}.patch ./
-            if [[ -f "fengchi_${{env.SCHED_FILE}}.patch" ]]; then
-              dos2unix "fengchi_${{env.SCHED_FILE}}.patch"
-              patch -p1 -F 3 < "fengchi_${{env.SCHED_FILE}}.patch"
+            cp ./SCHED_PATCH/fengchi_${{ env.SCHED_FILE }}.patch ./
+            if [[ -f "fengchi_${{ env.SCHED_FILE }}.patch" ]]; then
+              dos2unix "fengchi_${{ env.SCHED_FILE }}.patch"
+              patch -p1 -F 3 < "fengchi_${{ env.SCHED_FILE }}.patch"
             else
               echo "❌ 未匹配到补丁"
               exit 11
@@ -482,6 +488,7 @@ jobs:
 
       - name: 🔨 Build Kernel
         run: |
+          set -euo pipefail
           WORKDIR="$(pwd)"
           export PATH="/usr/lib/ccache:$PATH"
           export PATH="$WORKDIR/kernel_workspace/clang18/bin:$PATH"
@@ -535,7 +542,8 @@ jobs:
           sudo rm -rf /usr/local/lib/android &
           sudo rm -rf /opt/ghc &
           sudo rm -rf /opt/hostedtoolcache/CodeQL &
-          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error gki_defconfig &&
+          wait
+          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error gki_defconfig
           make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="$(pwd)/cc-wrapper" LD="$(pwd)/ld-wrapper" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error Image
           LD_PRELOAD=$PRELOAD_LIBS stat ./Makefile
           echo "ccache状态："
@@ -556,7 +564,7 @@ jobs:
           key: ccache-ECS-${{ env.KSU_TYPE }}-${{ env.DEVICES_NAME }}-${{ github.run_id }}
 
       - name: 🧹 Clean old ccache
-        if: env.BUILD_TIME > 480
+        if: ${{ env.BUILD_TIME > 480 }}
         uses: actions/github-script@v7
         env:
           PREFIX: ccache-ECS-${{ env.KSU_TYPE }}-${{ env.DEVICES_NAME }}-
@@ -584,37 +592,46 @@ jobs:
             }
             core.info(`删除 ${deleted} 个旧缓存`);
 
-      # ========== 打包 & 上传 ==========
       - name: 📦 Make AnyKernel3 (创建Anykernel3)
         run: |
+          set -euo pipefail
+          if [ -f kernel_workspace/common/out/arch/arm64/boot/Image ]; then
+            cp kernel_workspace/common/out/arch/arm64/boot/Image .
+          else
+            echo "::error::找不到内核镜像 Image 文件"
+            exit 1
+          fi
+          if [ ! -f "${GITHUB_WORKSPACE}/.github/workflows/tools/main.bin" ]; then
+            echo "::error::AnyKernel3 打包程序 main.bin 缺失"
+            exit 1
+          fi
           cp "${GITHUB_WORKSPACE}/.github/workflows/tools/main.bin" ./
           chmod +x main.bin
           ./main.bin "make_anykernel3"
-          rm -rf ./main.bin
-          
+          rm -f ./main.bin
+
       - name: 📤 Upload AnyKernel3 (上传 Anykernel3)
         uses: actions/upload-artifact@v5
         with:
-         name: AK3_${{ env.KSUVER }}_${{ env.DEVICES_NAME }}_${{ env.KSU_TYPE }}
-         path: ./AnyKernel3/*
+          name: AK3_${{ env.KSUVER }}_${{ env.DEVICES_NAME }}_${{ env.KSU_TYPE }}
+          path: ./AnyKernel3/*
 
-      # ----- 镜像上传（密码保护） -----
-      - name: 🔐 Verify Image Upload Password
-        if: ${{ env.UPLOAD_IMAGE == 'true' && env.IMAGE_UPLOAD_PASSWORD != '' }}
+      # ========== 镜像上传改用 Secret 验证 ==========
+      - name: 🔐 Check Image Upload Secret
+        if: ${{ env.UPLOAD_IMAGE == 'true' }}
         run: |
-          EXPECTED_PASSWORD=$(cat "${GITHUB_WORKSPACE}/.github/workflows/tools/666.txt")
-          if [ "$IMAGE_UPLOAD_PASSWORD" != "$EXPECTED_PASSWORD" ]; then
-            echo "::error::镜像上传密码错误，无法上传 Image"
+          if [ -z "${{ secrets.IMAGE_UPLOAD_PWD }}" ]; then
+            echo "::error::该仓库未配置 IMAGE_UPLOAD_PWD secret，无法上传内核镜像"
             exit 1
           fi
-          echo "✅ 密码验证通过，允许上传 Image"
+          echo "✅ 镜像上传授权通过"
 
       - name: 📤 Upload Kernel Image (上传内核镜像)
         if: ${{ env.UPLOAD_IMAGE == 'true' }}
         uses: actions/upload-artifact@v5
         with:
-         name: Image-${{ env.DEVICES_NAME }}-${{ env.KSU_TYPE }}
-         path: kernel_workspace/common/out/arch/arm64/boot/Image
+          name: Image-${{ env.DEVICES_NAME }}-${{ env.KSU_TYPE }}
+          path: kernel_workspace/common/out/arch/arm64/boot/Image
 
   upload_rekernel:
     name: Upload Re-Kernel Module
@@ -622,9 +639,12 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - name: Install aria2
+        run: sudo apt-get update && sudo apt-get install -y aria2
+
       - name: 🔎 Find Re-Kernel module zip (查找Re-Kernel最新模块并下载)
         id: download-rekernel
-        uses: actions/github-script@v8
+        uses: actions/github-script@v7
         env:
           KERNEL_MAJOR: "6.6"
         with:
@@ -674,7 +694,7 @@ jobs:
 
   create_release:
     name: 🚀 Publish GitHub Release
-    needs: build
+    needs: [build, upload_rekernel]          # 等待 build 和 upload_rekernel 都完成
     runs-on: ubuntu-latest
     if: ${{ ! failure() && ! cancelled() }}
     steps:
