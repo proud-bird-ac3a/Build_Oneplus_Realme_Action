@@ -372,12 +372,21 @@ jobs:
         run: |
           cd kernel_workspace
           git clone https://github.com/cctv18/oppo_oplus_realme_sm8750.git
-          cp ./oppo_oplus_realme_sm8750/zram_patch/001-lz4.patch ./common
-          cp ./oppo_oplus_realme_sm8750/zram_patch/lz4armv8.S ./common/lib
-          cp ./oppo_oplus_realme_sm8750/zram_patch/002-zstd.patch ./common/
-          cd ./common
-          patch -p1 < 001-lz4.patch || { echo "::error::LZ4 补丁应用失败"; exit 1; }
-          patch -p1 < 002-zstd.patch || { echo "::error::Zstd 补丁应用失败"; exit 1; }
+          cd common
+          # 临时初始化 Git 仓库，以便 git apply 支持重命名
+          git init
+          git config user.email "builder@localhost"
+          git config user.name "Builder"
+          git add -A .
+          git commit -m "base"
+          # 应用 LZ4 补丁（支持重命名）
+          git apply ../oppo_oplus_realme_sm8750/zram_patch/001-lz4.patch || { echo "::error::LZ4 补丁应用失败"; exit 1; }
+          # 应用 Zstd 补丁
+          git apply ../oppo_oplus_realme_sm8750/zram_patch/002-zstd.patch || { echo "::error::Zstd 补丁应用失败"; exit 1; }
+          # 清理临时 Git 仓库
+          rm -rf .git
+          # 拷贝 lz4armv8.S 文件
+          cp ../oppo_oplus_realme_sm8750/zram_patch/lz4armv8.S ./lib/
 
       - name: 🔧 Set Baseband-guard
         if: ${{ env.ENABLE_BBG == 'true' }}
