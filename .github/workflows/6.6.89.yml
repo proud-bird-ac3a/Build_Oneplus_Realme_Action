@@ -445,49 +445,12 @@ jobs:
           echo "正在添加lz4 1.10.0 & zstd 1.5.7补丁…"
           cd kernel_workspace
           git clone https://github.com/cctv18/oppo_oplus_realme_sm8750.git
-          cd common
-
-          # ----- LZ4 -----
-          cp ../oppo_oplus_realme_sm8750/zram_patch/001-lz4.patch .
-
-          # 第一次 patch：允许失败，先完成所有不涉及重命名的修改
-          patch -p1 --ignore-whitespace < 001-lz4.patch || true
-
-          # 手动处理补丁中的文件重命名（从补丁文件里提取 rename from / to）
-          while IFS= read -r line; do
-            if [[ "$line" =~ ^rename\ from\ (.*) ]]; then
-              from="${BASH_REMATCH[1]}"
-              read -r nextline
-              if [[ "$nextline" =~ ^rename\ to\ (.*) ]]; then
-                to="${BASH_REMATCH[1]}"
-                if [ -f "$from" ]; then
-                  echo "重命名: $from -> $to"
-                  mv "$from" "$to"
-                fi
-              fi
-            fi
-          done < 001-lz4.patch
-
-          # 第二次 patch：现在文件已就位，补丁可以完全清洁应用
-          patch -p1 --ignore-whitespace < 001-lz4.patch
-          if [ $? -ne 0 ]; then
-            echo "::error::LZ4 补丁最终应用失败"
-            exit 1
-          fi
-
-          # ----- Zstd -----
-          cp ../oppo_oplus_realme_sm8750/zram_patch/002-zstd.patch .
-          patch -p1 < 002-zstd.patch
-          if [ $? -ne 0 ]; then
-            echo "::error::Zstd 补丁应用失败"
-            exit 1
-          fi
-
-          # 拷贝 lz4armv8.S
-          cp ../oppo_oplus_realme_sm8750/zram_patch/lz4armv8.S ./lib/
-
-          # 清理
-          rm -f 001-lz4.patch 002-zstd.patch
+          cp ./oppo_oplus_realme_sm8750/zram_patch/001-lz4.patch ./common
+          cp ./oppo_oplus_realme_sm8750/zram_patch/lz4armv8.S ./common/lib
+          cp ./oppo_oplus_realme_sm8750/zram_patch/002-zstd.patch ./common/
+          cd ./common
+          git apply -p1 < 001-lz4.patch || true
+          patch -p1 < 002-zstd.patch || true
           
       - name: 🔧 Set Baseband-guard (开启BBG基带守护)
         if: ${{ env.ENABLE_BBG == 'true' }}
