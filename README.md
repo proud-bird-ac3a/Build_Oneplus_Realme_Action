@@ -1,5 +1,3 @@
-好的，按您的要求已去掉酷安，并将 Telegram 调整为 https://t.me/Droidcess。以下是修改后的完整 README，直接替换即可。
-
 ```markdown
 # OnePlus/Realme SM8750 内核构建项目 (二创)
 
