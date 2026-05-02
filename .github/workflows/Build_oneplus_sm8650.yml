@@ -1,6 +1,6 @@
 name: Build_oneplus_sm8650
 permissions:
-  contents: read
+  contents: write   # 创建 Release 需要
   actions: write
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ on:
           - 'ReSukiSU'
           - 'SukiSU-Ultra'
         default: 'ReSukiSU'
-        
+
       kernel_version:
         description: "📝请选择要编译的内核版本"
         required: true
@@ -32,7 +32,7 @@ on:
         description: "✏️ 自定义内核名称 (留空则默认）"
         required: false
         default: ''
-      
+
       custom_kernel_time:
         description: "⏰ 自定义构建时间 (英文时间字符串格式 留空则默认）"
         required: false
@@ -62,23 +62,30 @@ on:
         default: true
         type: boolean
 
-       
+      enable_droidspaces:
+        description: "启用 Droidspaces 容器支持 (基于官方 kABI 补丁)"
+        required: true
+        default: false
+        type: boolean
 
 
 jobs:
   build:
     name: Build_${{ github.event.inputs.kernel_version }}_${{ github.event.inputs.ksu_type }}
     runs-on: ubuntu-latest
+    outputs:
+      ksuver: ${{ env.KSUVER }}
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       KSU_TYPE:               ${{ github.event.inputs.ksu_type }}
-      KERNEL_VERSION:           ${{ github.event.inputs.kernel_version }}
+      KERNEL_VERSION:         ${{ github.event.inputs.kernel_version }}
       CUSTOM_KERNEL_SUFFIX:   ${{ github.event.inputs.custom_kernel_suffix }}
       CUSTOM_KERNEL_TIME:     ${{ github.event.inputs.custom_kernel_time }}
       ENABLE_REKERNEL:        ${{ github.event.inputs.enable_ReKernel }}
       ENABLE_ADIOS:           ${{ github.event.inputs.enable_Adios }}
       ENABLE_BBG:             ${{ github.event.inputs.enable_bbg }}
       ENABLE_SUSFS:           ${{ github.event.inputs.enable_susfs }}
+      ENABLE_DROIDSPACES:     ${{ github.event.inputs.enable_droidspaces }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -191,25 +198,24 @@ jobs:
             sed -i 's/ -dirty//g' "$f"
             sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' "$f"
           done
-          # 验证符号链接是否正常（tar.gz 原生保留符号链接）
           echo "验证关键符号链接..."
-            ls -la common/kernel/oplus_cpu || echo "(SKIP) common/kernel/oplus_cpu不存在"
-            ls -la common/drivers/soc/oplus/oplus_resctrl || echo "(SKIP) common/drivers/soc/oplus/oplus_resctrl 不存在"
-            ls -la common/drivers/soc/oplus/storage || echo "(SKIP) common/drivers/soc/oplus/storage 不存在"
-            ls -la common/kernel/locking/locking_main.h || echo "(SKIP) common/kernel/locking/locking_main.h不存在"
-            ls -la common/kernel/locking/oplus_locking.c || echo "(SKIP) common/kernel/locking/oplus_locking.c不存在"
-            ls -la common/kernel/locking/sa_common_struct.h || echo "(SKIP) common/kernel/locking/sa_common_struct.h不存在"
+          ls -la common/kernel/oplus_cpu || echo "(SKIP) common/kernel/oplus_cpu不存在"
+          ls -la common/drivers/soc/oplus/oplus_resctrl || echo "(SKIP) common/drivers/soc/oplus/oplus_resctrl 不存在"
+          ls -la common/drivers/soc/oplus/storage || echo "(SKIP) common/drivers/soc/oplus/storage 不存在"
+          ls -la common/kernel/locking/locking_main.h || echo "(SKIP) common/kernel/locking/locking_main.h不存在"
+          ls -la common/kernel/locking/oplus_locking.c || echo "(SKIP) common/kernel/locking/oplus_locking.c不存在"
+          ls -la common/kernel/locking/sa_common_struct.h || echo "(SKIP) common/kernel/locking/sa_common_struct.h不存在"
           echo "验证符号链接可访问性..."
-            if [ -e common/kernel/oplus_cpu ]; then
-              ls common/kernel/oplus_cpu/sched/Kconfig || echo "ERROR: 符号链接目标不可达!"
-            else
-              echo "(SKIP) common/kernel/oplus_cpu 不存在，跳过可访问性检查"
-            fi
-            if [ -e common/drivers/soc/oplus/oplus_resctrl ]; then
-              ls common/drivers/soc/oplus/oplus_resctrl/Kbuild || echo "ERROR: 符号链接目标不可达!"
-            else
-              echo "(SKIP) common/drivers/soc/oplus/oplus_resctrl不存在，跳过可访问性检查"
-            fi
+          if [ -e common/kernel/oplus_cpu ]; then
+            ls common/kernel/oplus_cpu/sched/Kconfig || echo "ERROR: 符号链接目标不可达!"
+          else
+            echo "(SKIP) common/kernel/oplus_cpu 不存在，跳过可访问性检查"
+          fi
+          if [ -e common/drivers/soc/oplus/oplus_resctrl ]; then
+            ls common/drivers/soc/oplus/oplus_resctrl/Kbuild || echo "ERROR: 符号链接目标不可达!"
+          else
+            echo "(SKIP) common/drivers/soc/oplus/oplus_resctrl不存在，跳过可访问性检查"
+          fi
           echo "验证vendor目录结构..."
           if [ "${KERNEL_VERSION}" = "6.1.57" ] || [ "${KERNEL_VERSION}" = "6.1.75" ] || [ "${KERNEL_VERSION}" = "6.1.118" ] || [ "${KERNEL_VERSION}" = "6.1.141" ]; then
             ls -la ../vendor/oplus/kernel/ || echo "ERROR: ../vendor/oplus/kernel/目录不正确!"
@@ -247,7 +253,6 @@ jobs:
             const repoName = process.env.PUBLIC_CACHE_REPO || 'showdo/Public_Ccache';
             const releaseTag = process.env.PUBLIC_CACHE_TAG || 'exported-ccaches';
             const [owner, repo] = repoName.split('/');
-            // 移除所有中英文括号及其中内容（如 (天玑)、（测试）等），只保留纯内核版本号
             const deviceName = process.env.KERNEL_VERSION.replace(/[(（][^)）]*[)）]/g, '').trim();
             let selected = null;
 
@@ -337,7 +342,6 @@ jobs:
       
       - name: 📥 Init ccache (初始化配置ccache)
         run: |
-          # 设置ccache环境变量
           export CCACHE_COMPILERCHECK="none"
           export CCACHE_BASEDIR="${{ github.workspace }}"
           export CCACHE_NOHASHDIR="true"
@@ -345,19 +349,15 @@ jobs:
           export CCACHE_DIR="${{ env.CCACHE_DIR }}"
           export CCACHE_MAXSIZE="${{ env.CCACHE_MAXSIZE }}"
           
-          # 确保ccache目录存在
           mkdir -p "$CCACHE_DIR"
           
-          # 每次运行都重新配置缓存大小
           echo "配置ccache缓存大小为: $CCACHE_MAXSIZE"
           ccache -M "$CCACHE_MAXSIZE"
           ccache -o compression=true
           
-          # 显示初始缓存状态
           echo "ccache初始状态:"
           ccache -s
           
-          # 如果缓存恢复命中，显示详细信息
           if [ -n "${{ steps.ccache-restore.outputs.cache-matched-key }}" ]; then
             echo "ccache缓存命中详情: ${{ steps.ccache-restore.outputs.cache-matched-key }}"
             ccache -sv
@@ -446,7 +446,7 @@ jobs:
           sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/lockdown/lockdown,baseband_guard/ } }' ./common/security/Kconfig
 
       
-      
+
       - name: ⚙️ Set ${{ env.KSU_TYPE }} (设置${{ env.KSU_TYPE }})
         run: |
           cd kernel_workspace
@@ -543,6 +543,43 @@ jobs:
           
           #Remove check_defconfig
           sudo sed -i 's/check_defconfig//' ./common/build.config.gki
+
+      # ========== Droidspaces 支持（可选） ==========
+      - name: 🔧 Apply Droidspaces kABI patch (应用 kABI 修复补丁)
+        if: ${{ env.ENABLE_DROIDSPACES == 'true' }}
+        run: |
+          cd kernel_workspace
+          echo "正在下载并应用 Droidspaces kABI 修复补丁..."
+          PATCH_URL="https://raw.githubusercontent.com/ravindu644/Droidspaces-OSS/main/Documentation/resources/kernel-patches/GKI/below-kernel-6.12/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch"
+          wget -O droidspaces_kabi.patch "$PATCH_URL"
+          cd common
+          patch -p1 --ignore-whitespace -F 3 < ../droidspaces_kabi.patch || {
+            echo "::warning::kABI 补丁应用失败，Droidspaces 可能无法正常工作"
+          }
+          echo "✓ Droidspaces kABI 补丁应用完成"
+
+      - name: 🔧 Add Droidspaces GKI config (添加官方推荐配置)
+        if: ${{ env.ENABLE_DROIDSPACES == 'true' }}
+        run: |
+          cd kernel_workspace/common
+          echo "正在添加 Droidspaces 官方推荐 GKI 配置..."
+          DEFCONFIG=arch/arm64/configs/gki_defconfig
+          CONFIGS=(
+            CONFIG_SYSVIPC=y CONFIG_POSIX_MQUEUE=y
+            CONFIG_IPC_NS=y CONFIG_PID_NS=y
+            CONFIG_DEVTMPFS=y
+            CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y
+            CONFIG_NETFILTER_XT_TARGET_REJECT=y
+            CONFIG_NETFILTER_XT_TARGET_LOG=y
+            CONFIG_NETFILTER_XT_MATCH_RECENT=y
+            CONFIG_IP_SET=y CONFIG_IP_SET_HASH_IP=y CONFIG_IP_SET_HASH_NET=y CONFIG_NETFILTER_XT_SET=y
+          )
+          for cfg in "${CONFIGS[@]}"; do
+            key="${cfg%%=*}"
+            sed -i "/^${key}=/d; /^# ${key} is not set/d" "$DEFCONFIG"
+            echo "$cfg" >> "$DEFCONFIG"
+          done
+          echo "✓ Droidspaces GKI 配置已添加"
 
       - name: 🔧 Set Kernel name (设置内核名称)
         run: |
@@ -787,3 +824,56 @@ jobs:
         with:
           name: Re-Kernel-v${{ steps.download-rekernel.outputs.version-number }}
           path: Re-Kernel-v${{ steps.download-rekernel.outputs.version-number }}
+
+  create_release:
+    name: 🚀 Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: ${{ ! failure() && ! cancelled() }}
+    steps:
+      - name: ⬇️ Download AnyKernel3 artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: AK3_${{ needs.build.outputs.ksuver }}_${{ github.event.inputs.kernel_version }}_TG@qdykernel
+          path: ./ak3-files
+
+      - name: 📦 Repack AnyKernel3 into single zip
+        run: |
+          cd ak3-files
+          # 处理可能的多层目录
+          if [ -d "AK3_*" ]; then
+            cd AK3_*
+          fi
+          ZIP_NAME="AnyKernel3_${{ needs.build.outputs.ksuver }}_${{ github.event.inputs.kernel_version }}_TG@qdykernel.zip"
+          zip -r "../${ZIP_NAME}" ./*
+          echo "AK3_ZIP=${ZIP_NAME}" >> $GITHUB_ENV
+          cd ..
+
+      - name: 📋 Prepare release info
+        id: release-info
+        run: |
+          TIMESTAMP=$(date -u +'%Y%m%d%H%M%S')
+          TAG="${{ github.event.inputs.kernel_version }}-${{ github.event.inputs.ksu_type }}-${TIMESTAMP}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "release_name=${{ github.event.inputs.kernel_version }} - ${{ github.event.inputs.ksu_type }} (Build ${TIMESTAMP})" >> $GITHUB_OUTPUT
+
+      - name: 🚀 Create Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release-info.outputs.tag }}
+          name: ${{ steps.release-info.outputs.release_name }}
+          body: |
+            ### 构建详情
+            - **内核版本**: ${{ github.event.inputs.kernel_version }}
+            - **KSU 类型**: ${{ github.event.inputs.ksu_type }}
+            - **SUSFS**: ${{ github.event.inputs.enable_susfs }}
+            - **Re-Kernel**: ${{ github.event.inputs.enable_ReKernel }}
+            - **BBG**: ${{ github.event.inputs.enable_bbg }}
+            - **ADIOS**: ${{ github.event.inputs.enable_Adios }}
+            - **Droidspaces**: ${{ github.event.inputs.enable_droidspaces }}
+            - **构建分支**: ${{ github.ref_name }}
+            - **运行编号**: ${{ github.run_id }}
+          files: |
+            ${{ env.AK3_ZIP }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
