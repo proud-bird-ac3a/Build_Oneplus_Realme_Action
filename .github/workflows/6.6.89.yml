@@ -71,6 +71,12 @@ on:
         default: true
         type: boolean
 
+      enable_droidspaces:
+        description: "添加 Droidspaces 支持（容器化/DroidRun）"
+        required: true
+        default: false
+        type: boolean
+
 
 
 jobs:
@@ -90,6 +96,7 @@ jobs:
       ENABLE_ADIOS:           ${{ github.event.inputs.enable_Adios }}
       ENABLE_SCX:             ${{ github.event.inputs.enable_scx }}
       ENABLE_BBG:             ${{ github.event.inputs.enable_bbg }}
+      ENABLE_DROIDSPACES:     ${{ github.event.inputs.enable_droidspaces }}
       ANDROID_VERSION:        'android15'     # 方便后续升级
       KERNEL_VERSION:         '6.6'           # 方便后续升级
     steps:
@@ -572,8 +579,9 @@ jobs:
           #Remove check_defconfig
           sudo sed -i 's/check_defconfig//' ./common/build.config.gki
 
-      # ========== Droidspaces 支持（新增） ==========
+      # ========== Droidspaces 支持（可选） ==========
       - name: 🚫 Check Droidspaces incompatible device (天玑机型检查)
+        if: ${{ env.ENABLE_DROIDSPACES == 'true' }}
         run: |
           if [ "${{ env.DEVICES_NAME }}" = "oneplus_ace5_ultra" ] || [ "${{ env.DEVICES_NAME }}" = "realme_GT7" ]; then
             echo "::warning::天玑(MTK)机型暂不支持 Droidspaces，跳过配置"
@@ -584,7 +592,7 @@ jobs:
           fi
 
       - name: 🔧 Add Droidspaces Support (添加 Droidspaces 支持)
-        if: ${{ env.SKIP_DROIDSPACES == 'false' }}
+        if: ${{ env.ENABLE_DROIDSPACES == 'true' && env.SKIP_DROIDSPACES == 'false' }}
         working-directory: kernel_workspace/common
         run: |
           echo "开始添加 Droidspaces 支持..."
