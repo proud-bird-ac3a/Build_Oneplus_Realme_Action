@@ -1,4 +1,4 @@
-name: Build_oneplus_sm8750
+name: Build_oneplus_sm8750 Droidspaces
 permissions:
   contents: write   # 创建 Release 所必需
   actions: write
@@ -77,6 +77,12 @@ on:
         default: false
         type: boolean
 
+      enable_upload_image:
+        description: "上传内核 Image 镜像文件（跟随 AK3 包一起发布）"
+        required: true
+        default: false
+        type: boolean
+
 
 
 jobs:
@@ -85,6 +91,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       ak3name: ${{ steps.create_zip.outputs.ak3name }}
+      ksuver: ${{ env.KSUVER }}
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       KSU_TYPE:               ${{ github.event.inputs.ksu_type }}
@@ -97,6 +104,7 @@ jobs:
       ENABLE_SCX:             ${{ github.event.inputs.enable_scx }}
       ENABLE_BBG:             ${{ github.event.inputs.enable_bbg }}
       ENABLE_DROIDSPACES:     ${{ github.event.inputs.enable_droidspaces }}
+      ENABLE_UPLOAD_IMAGE:    ${{ github.event.inputs.enable_upload_image }}
       ANDROID_VERSION:        'android15'     # 方便后续升级
       KERNEL_VERSION:         '6.6'           # 方便后续升级
     steps:
@@ -164,7 +172,6 @@ jobs:
             echo "DEFAULT_SUFFIX=$DEFAULT_SUFFIX" >> $GITHUB_ENV
             echo "使用原官核名称：$DEFAULT_SUFFIX"
           else
-              # 验证用户输入是否以 - 开头
               if [[ "${{ github.event.inputs.custom_kernel_suffix }}" != -* ]]; then
                 echo "::warning::自定义内核名称请以 - 开头"
                 echo "示例：-android15-8-g096cdb6ecefc-ab14358676-4k"
@@ -362,7 +369,6 @@ jobs:
       
       - name: 📥 Init ccache (初始化配置ccache)
         run: |
-          # 设置ccache环境变量
           export CCACHE_COMPILERCHECK="none"
           export CCACHE_BASEDIR="${{ github.workspace }}"
           export CCACHE_NOHASHDIR="true"
@@ -370,19 +376,15 @@ jobs:
           export CCACHE_DIR="${{ env.CCACHE_DIR }}"
           export CCACHE_MAXSIZE="${{ env.CCACHE_MAXSIZE }}"
           
-          # 确保ccache目录存在
           mkdir -p "$CCACHE_DIR"
           
-          # 每次运行都重新配置缓存大小
           echo "配置ccache缓存大小为: $CCACHE_MAXSIZE"
           ccache -M "$CCACHE_MAXSIZE"
           ccache -o compression=true
           
-          # 显示初始缓存状态
           echo "ccache初始状态:"
           ccache -s
           
-          # 如果缓存恢复命中，显示详细信息
           if [ -n "${{ steps.ccache-restore.outputs.cache-matched-key }}" ]; then
             echo "ccache缓存命中详情: ${{ steps.ccache-restore.outputs.cache-matched-key }}"
             ccache -sv
@@ -813,6 +815,7 @@ jobs:
          path: ./AnyKernel3/*
 
       - name: 📤 Upload Kernel Image (上传内核镜像)
+        if: ${{ env.ENABLE_UPLOAD_IMAGE == 'true' }}
         uses: actions/upload-artifact@v5
         with:
           name: Image-${{ env.DEVICES_NAME }}-${{ env.KSU_TYPE }}
@@ -920,27 +923,35 @@ jobs:
       - name: ⬇️ Download AnyKernel3 artifact
         uses: actions/download-artifact@v5
         with:
-          path: release-assets
-          pattern: AK3_*
-          merge-multiple: true
+          name: AK3_${{ needs.build.outputs.ksuver }}_${{ github.event.inputs.device_name }}_${{ github.event.inputs.ksu_type }}
+          path: ./ak3-files
 
-      - name: ⬇️ Download Kernel Image artifact
+      - name: ⬇️ Download Kernel Image artifact (可选)
+        if: ${{ github.event.inputs.enable_upload_image == 'true' }}
         uses: actions/download-artifact@v5
         with:
-          path: release-assets
-          pattern: Image-*
-          merge-multiple: true
+          name: Image-${{ github.event.inputs.device_name }}-${{ github.event.inputs.ksu_type }}
+          path: ./release-assets
+
+      - name: 📦 Repack AnyKernel3 into single zip
+        run: |
+          cd ak3-files
+          # 处理可能的多层目录
+          if [ -d "AK3_*" ]; then
+            cd AK3_*
+          fi
+          ZIP_NAME="AnyKernel3_${{ needs.build.outputs.ksuver }}_${{ github.event.inputs.device_name }}_${{ github.event.inputs.ksu_type }}.zip"
+          zip -r "../${ZIP_NAME}" ./*
+          echo "AK3_ZIP=${ZIP_NAME}" >> $GITHUB_ENV
+          cd ..
 
       - name: 📋 Prepare release info
         id: release-info
-        env:
-          DEVICE: ${{ github.event.inputs.device_name }}
-          KSU: ${{ github.event.inputs.ksu_type }}
         run: |
           TIMESTAMP=$(date -u +'%Y%m%d%H%M%S')
-          TAG="${DEVICE}-${KSU}-${TIMESTAMP}"
+          TAG="${{ github.event.inputs.device_name }}-${{ github.event.inputs.ksu_type }}-${TIMESTAMP}"
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          echo "release_name=${DEVICE} - ${KSU} (Build ${TIMESTAMP})" >> $GITHUB_OUTPUT
+          echo "release_name=${{ github.event.inputs.device_name }} - ${{ github.event.inputs.ksu_type }} (Build ${TIMESTAMP})" >> $GITHUB_OUTPUT
 
       - name: 🚀 Create Release and Upload Assets
         uses: softprops/action-gh-release@v2
@@ -954,9 +965,11 @@ jobs:
             - **SUSFS**: ${{ github.event.inputs.enable_susfs }}
             - **Re-Kernel**: ${{ github.event.inputs.enable_ReKernel }}
             - **Droidspaces**: ${{ github.event.inputs.enable_droidspaces }}
+            - **上传内核镜像**: ${{ github.event.inputs.enable_upload_image }}
             - **构建分支**: ${{ github.ref_name }}
             - **运行编号**: ${{ github.run_id }}
           files: |
-            release-assets/**/*
+            ${{ env.AK3_ZIP }}
+            release-assets/**
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
