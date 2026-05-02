@@ -77,6 +77,12 @@ on:
         default: false
         type: boolean
 
+      upload_image:
+        description: "上传内核镜像 (Image)"
+        required: true
+        default: false
+        type: boolean
+
 jobs:
   build:
     name: Build_${{ github.event.inputs.device_name }}_${{ github.event.inputs.ksu_type }}
@@ -93,6 +99,7 @@ jobs:
       ENABLE_SCX:             ${{ github.event.inputs.enable_scx }}
       ENABLE_BBG:             ${{ github.event.inputs.enable_bbg }}
       ENABLE_DROIDSPACES:     ${{ github.event.inputs.enable_droidspaces }}
+      UPLOAD_IMAGE:           ${{ github.event.inputs.upload_image }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -371,6 +378,7 @@ jobs:
           patch -p1 --ignore-whitespace < droidspaces.patch || { echo "::error::Droidspaces 补丁应用失败"; exit 1; }
           echo "✓ Droidspaces 支持配置完成"
 
+      # ============ 改回原版：lz4/zstd 补丁容错处理 ============
       - name: 🔧 apply lz4 & zstd patches
         run: |
           cd kernel_workspace
@@ -379,8 +387,8 @@ jobs:
           cp ./oppo_oplus_realme_sm8750/zram_patch/lz4armv8.S ./common/lib
           cp ./oppo_oplus_realme_sm8750/zram_patch/002-zstd.patch ./common/
           cd ./common
-          patch -p1 < 001-lz4.patch || { echo "::error::LZ4 补丁应用失败"; exit 1; }
-          patch -p1 < 002-zstd.patch || { echo "::error::Zstd 补丁应用失败"; exit 1; }
+          git apply -p1 < 001-lz4.patch || true
+          patch -p1 < 002-zstd.patch || true
 
       - name: 🔧 Set Baseband-guard
         if: ${{ env.ENABLE_BBG == 'true' }}
@@ -390,26 +398,48 @@ jobs:
           echo "CONFIG_BBG=y" >> ./common/arch/arm64/configs/gki_defconfig
           sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/lockdown/lockdown,baseband_guard/ } }' ./common/security/Kconfig
 
+      # ============ 改回原版：KSU 版本处理 ============
       - name: ⚙️ Set KSU
         run: |
           cd kernel_workspace
+          echo "正在配置${{ env.KSU_TYPE }}..."
           if [ "${{ env.KSU_TYPE }}" == 'ReSukiSU' ]; then
             curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/refs/heads/main/kernel/setup.sh" | bash -s main
-            cd ./KernelSU
+            cd ./KernelSU 
             KSU_VERSION=$(expr $(git rev-list --count main) + 30700 2>/dev/null || echo 114514)
             echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
+            echo "ksuver=$KSU_VERSION" >> $GITHUB_OUTPUT
           else
             curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/refs/heads/main/kernel/setup.sh" | bash -s builtin
             cd ./KernelSU
             GIT_COMMIT_HASH=$(git rev-parse --short=8 HEAD)
-            KSU_API_VERSION="4.1.0"
+            echo "当前提交哈希: $GIT_COMMIT_HASH"
+            export KSU_VERSION=$KSU_VERSION
+            for i in {1..3}; do
+              KSU_API_VERSION=$(curl -s "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/builtin/kernel/Makefile" | 
+                grep -m1 "KSU_VERSION_API :=" | 
+                awk -F'= ' '{print $2}' | 
+                tr -d '[:space:]')
+              [ -n "$KSU_API_VERSION" ] && break || sleep 1
+            done
+            [ -z "$KSU_API_VERSION" ] && KSU_API_VERSION="4.1.0"
+            echo "KSU_API_VERSION=$KSU_API_VERSION" >> $GITHUB_ENV
             VERSION_DEFINITIONS=$'define get_ksu_version_full\nv\\$1-'"$GIT_COMMIT_HASH"$'-TG@qdykernel\nendef\n\nKSU_VERSION_API := '"$KSU_API_VERSION"$'\nKSU_VERSION_FULL := v'"$KSU_API_VERSION"$'-'"$GIT_COMMIT_HASH"$'-TG@qdykernel'
+            
             sed -i '/define get_ksu_version_full/,/endef/d' kernel/Makefile
             sed -i '/KSU_VERSION_API :=/d' kernel/Makefile
             sed -i '/KSU_VERSION_FULL :=/d' kernel/Makefile
-            awk -v def="$VERSION_DEFINITIONS" '/REPO_OWNER :=/ {print; print def; inserted=1; next} 1 END {if (!inserted) print def}' kernel/Makefile > kernel/Makefile.tmp && mv kernel/Makefile.tmp kernel/Makefile
+            awk -v def="$VERSION_DEFINITIONS" '
+              /REPO_OWNER :=/ {print; print def; inserted=1; next}
+              1
+              END {if (!inserted) print def}
+            ' kernel/Makefile > kernel/Makefile.tmp && mv kernel/Makefile.tmp kernel/Makefile
             KSU_VERSION=$(expr $(git rev-list --count main) + 37185 2>/dev/null || echo 114514)
             echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
+            echo "ksuver=$KSU_VERSION" >> $GITHUB_OUTPUT
+            grep -A10 "REPO_OWNER" kernel/Makefile
+            grep "KSU_VERSION_FULL" kernel/Makefile
+            echo "SukiSU版本号: v${KSU_API_VERSION}-${GIT_COMMIT_HASH}-TG@qdykernel"
           fi
 
       - name: 🔧 Set up SUSFS
@@ -597,23 +627,13 @@ jobs:
             }
             core.info(`删除 ${deleted} 个旧缓存`);
 
+      # ============ 改回原版：AK3 制作（无 Image 拷贝，无检查） ============
       - name: 📦 Make AnyKernel3 (创建Anykernel3)
         run: |
-          set -euo pipefail
-          if [ -f kernel_workspace/common/out/arch/arm64/boot/Image ]; then
-            cp kernel_workspace/common/out/arch/arm64/boot/Image .
-          else
-            echo "::error::找不到内核镜像 Image 文件"
-            exit 1
-          fi
-          if [ ! -f "${GITHUB_WORKSPACE}/.github/workflows/tools/main.bin" ]; then
-            echo "::error::AnyKernel3 打包程序 main.bin 缺失"
-            exit 1
-          fi
           cp "${GITHUB_WORKSPACE}/.github/workflows/tools/main.bin" ./
           chmod +x main.bin
           ./main.bin "make_anykernel3"
-          rm -f ./main.bin
+          rm -rf ./main.bin
 
       - name: 📤 Upload AnyKernel3 (上传 Anykernel3)
         uses: actions/upload-artifact@v5
@@ -621,7 +641,9 @@ jobs:
          name: AK3_${{ env.KSUVER }}_${{ env.DEVICES_NAME }}_${{ env.KSU_TYPE }}
          path: ./AnyKernel3/*
 
+      # ============ 镜像上传改为可选 ============
       - name: 📤 Upload Kernel Image (上传内核镜像)
+        if: ${{ env.UPLOAD_IMAGE == 'true' }}
         uses: actions/upload-artifact@v5
         with:
           name: Image-${{ env.DEVICES_NAME }}-${{ env.KSU_TYPE }}
@@ -699,7 +721,9 @@ jobs:
           pattern: AK3_*
           merge-multiple: true
 
+      # 改为可选，仅在启用上传镜像时下载
       - name: ⬇️ Download Kernel Image artifact
+        if: ${{ github.event.inputs.upload_image == 'true' }}
         uses: actions/download-artifact@v5
         with:
           path: release-assets
@@ -739,6 +763,7 @@ jobs:
             - **SUSFS**: ${{ github.event.inputs.enable_susfs }}
             - **Re-Kernel**: ${{ github.event.inputs.enable_ReKernel }}
             - **Droidspaces**: ${{ github.event.inputs.enable_droidspaces }}
+            - **上传镜像**: ${{ github.event.inputs.upload_image }}
             - **构建分支**: ${{ github.ref_name }}
             - **运行编号**: ${{ github.run_id }}
           files: |
