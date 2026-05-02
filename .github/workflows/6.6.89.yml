@@ -378,7 +378,6 @@ jobs:
           patch -p1 --ignore-whitespace < droidspaces.patch || { echo "::error::Droidspaces 补丁应用失败"; exit 1; }
           echo "✓ Droidspaces 支持配置完成"
 
-      # ============ 原版 lz4/zstd 容错处理 ============
       - name: 🔧 apply lz4 & zstd patches
         run: |
           cd kernel_workspace
@@ -441,7 +440,6 @@ jobs:
             echo "SukiSU版本号: v${KSU_API_VERSION}-${GIT_COMMIT_HASH}-TG@qdykernel"
           fi
 
-      # ========== SUSFS 恢复原版容错并补充缺失符号 ==========
       - name: 🔧 Set up SUSFS (配置 SUSFS)
         if: ${{ env.ENABLE_SUSFS == 'true' }}
         run: |
@@ -452,18 +450,16 @@ jobs:
           cp ./susfs4ksu/kernel_patches/fs/* ./common/fs/
           cp ./susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
           cd ./common
-          # 恢复原版容错：允许补丁部分失败
+          # 原版容错：补丁允许失败
           patch -p1 < 50_add_susfs_in_gki-android15-6.6.patch || true
           patch -p1 -N -F 3 < 69_hide_stuff.patch || true
 
-          # 补充补丁可能缺失的 susfs_extra_works 符号，避免链接错误
+          # 补充缺失的 susfs_extra_works 符号（放入 KernelSU 目录保证编译进去）
           if ! grep -q "susfs_extra_works" include/linux/susfs.h 2>/dev/null; then
             echo 'extern void susfs_extra_works(struct work_struct *work);' >> include/linux/susfs.h
           fi
-          mkdir -p fs/susfs
-          echo '#include <linux/susfs.h>
-          void susfs_extra_works(struct work_struct *work) {}' > fs/susfs/susfs_extra_works.c
-          echo 'obj-y += susfs_extra_works.o' >> fs/susfs/Makefile
+          echo 'void susfs_extra_works(struct work_struct *work) {}' > ../drivers/kernelsu/susfs_extra_works.c
+          echo 'obj-y += susfs_extra_works.o' >> ../drivers/kernelsu/Makefile
 
           echo "[OK] SUSFS 补丁处理流程全部完成（已兼容缺失符号）"
 
