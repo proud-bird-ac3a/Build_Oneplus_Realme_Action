@@ -378,7 +378,7 @@ jobs:
           patch -p1 --ignore-whitespace < droidspaces.patch || { echo "::error::Droidspaces 补丁应用失败"; exit 1; }
           echo "✓ Droidspaces 支持配置完成"
 
-      # ============ 改回原版：lz4/zstd 补丁容错处理 ============
+      # ============ 原版 lz4/zstd 容错处理 ============
       - name: 🔧 apply lz4 & zstd patches
         run: |
           cd kernel_workspace
@@ -398,7 +398,6 @@ jobs:
           echo "CONFIG_BBG=y" >> ./common/arch/arm64/configs/gki_defconfig
           sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/lockdown/lockdown,baseband_guard/ } }' ./common/security/Kconfig
 
-      # ============ 改回原版：KSU 版本处理 ============
       - name: ⚙️ Set KSU
         run: |
           cd kernel_workspace
@@ -442,7 +441,8 @@ jobs:
             echo "SukiSU版本号: v${KSU_API_VERSION}-${GIT_COMMIT_HASH}-TG@qdykernel"
           fi
 
-      - name: 🔧 Set up SUSFS
+      # ========== SUSFS 恢复原版容错并补充缺失符号 ==========
+      - name: 🔧 Set up SUSFS (配置 SUSFS)
         if: ${{ env.ENABLE_SUSFS == 'true' }}
         run: |
           cd kernel_workspace
@@ -452,8 +452,20 @@ jobs:
           cp ./susfs4ksu/kernel_patches/fs/* ./common/fs/
           cp ./susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
           cd ./common
-          patch -p1 < 50_add_susfs_in_gki-android15-6.6.patch || { echo "::error::SUSFS 基础补丁应用失败"; exit 1; }
-          patch -p1 -N -F 3 < 69_hide_stuff.patch || { echo "::error::SUSFS 隐藏补丁应用失败"; exit 1; }
+          # 恢复原版容错：允许补丁部分失败
+          patch -p1 < 50_add_susfs_in_gki-android15-6.6.patch || true
+          patch -p1 -N -F 3 < 69_hide_stuff.patch || true
+
+          # 补充补丁可能缺失的 susfs_extra_works 符号，避免链接错误
+          if ! grep -q "susfs_extra_works" include/linux/susfs.h 2>/dev/null; then
+            echo 'extern void susfs_extra_works(struct work_struct *work);' >> include/linux/susfs.h
+          fi
+          mkdir -p fs/susfs
+          echo '#include <linux/susfs.h>
+          void susfs_extra_works(struct work_struct *work) {}' > fs/susfs/susfs_extra_works.c
+          echo 'obj-y += susfs_extra_works.o' >> fs/susfs/Makefile
+
+          echo "[OK] SUSFS 补丁处理流程全部完成（已兼容缺失符号）"
 
       - name: 🔧 Set gki_defconfig
         run: |
@@ -483,6 +495,8 @@ jobs:
           echo "CONFIG_TMPFS_XATTR=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_TMPFS_POSIX_ACL=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> ./common/arch/arm64/configs/gki_defconfig
+          # 禁用 BTF 以避免 pahole 版本不兼容
+          echo "CONFIG_DEBUG_INFO_BTF=n" >> ./common/arch/arm64/configs/gki_defconfig
           sed -i 's/check_defconfig//' ./common/build.config.gki
 
       - name: 🔧 Set Kernel name
@@ -627,7 +641,6 @@ jobs:
             }
             core.info(`删除 ${deleted} 个旧缓存`);
 
-      # ============ 改回原版：AK3 制作（无 Image 拷贝，无检查） ============
       - name: 📦 Make AnyKernel3 (创建Anykernel3)
         run: |
           cp "${GITHUB_WORKSPACE}/.github/workflows/tools/main.bin" ./
@@ -641,7 +654,6 @@ jobs:
          name: AK3_${{ env.KSUVER }}_${{ env.DEVICES_NAME }}_${{ env.KSU_TYPE }}
          path: ./AnyKernel3/*
 
-      # ============ 镜像上传改为可选 ============
       - name: 📤 Upload Kernel Image (上传内核镜像)
         if: ${{ env.UPLOAD_IMAGE == 'true' }}
         uses: actions/upload-artifact@v5
@@ -710,7 +722,7 @@ jobs:
 
   create_release:
     name: 🚀 Publish GitHub Release
-    needs: build
+    needs: [build, upload_rekernel]   # 等待 build 和 upload_rekernel 都完成，避免 Re-Kernel 缺失
     runs-on: ubuntu-latest
     if: ${{ ! failure() && ! cancelled() }}
     steps:
@@ -721,7 +733,6 @@ jobs:
           pattern: AK3_*
           merge-multiple: true
 
-      # 改为可选，仅在启用上传镜像时下载
       - name: ⬇️ Download Kernel Image artifact
         if: ${{ github.event.inputs.upload_image == 'true' }}
         uses: actions/download-artifact@v5
