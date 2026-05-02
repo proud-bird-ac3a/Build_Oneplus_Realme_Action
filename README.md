@@ -1,182 +1,59 @@
-```markdown
-# OnePlus/Realme SM8750 内核构建项目 (二创)
+# 欧加真 SM8750/MT6991 系列通用6.6风驰移植内核自动化编译脚本 (二创)
+[![STAR](https://img.shields.io/github/stars/qdykernel/Build_Oneplus_Realme_Action?style=flat&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyByb2xlPSJpbWciIHZpZXdCb3g9IjAgMCAyNCAyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48dGl0bGU%2BR2l0SHViPC90aXRsZT48cGF0aCBkPSJNMTIgLjI5N2MtNi42MyAwLTEyIDUuMzczLTEyIDEyIDAgNS4zMDMgMy40MzggOS44IDguMjA1IDExLjM4NS42LjExMy44Mi0uMjU4LjgyLS41NzcgMC0uMjg1LS4wMS0xLjA0LS4wMTUtMi4wNC0zLjMzOC43MjQtNC4wNDItMS42MS00LjA0Mi0xLjYxQzQuNDIyIDE4LjA3IDMuNjMzIDE3LjcgMy42MzMgMTcuN2MtMS4wODctLjc0NC4wODQtLjcyOS4wODQtLjcyOSAxLjIwNS4wODQgMS44MzggMS4yMzYgMS44MzggMS4yMzYgMS4wNyAxLjgzNSAyLjgwOSAxLjMwNSAzLjQ5NS45OTguMTA4LS43NzYuNDE3LTEuMzA1Ljc2LTEuNjA1LTIuNjY1LS4zLTUuNDY2LTEuMzMyLTUuNDY2LTUuOTMgMC0xLjMxLjQ2NS0yLjM4IDEuMjM1LTMuMjItLjEzNS0uMzAzLS41NC0xLjUyMy4xMDUtMy4xNzYgMCAwIDEuMDA1LS4zMjIgMy4zIDEuMjMuOTYtLjI2NyAxLjk4LS4zOTkgMy0uNDA1IDEuMDIuMDA2IDIuMDQuMTM4IDMgLjQwNSAyLjI4LTEuNTUyIDMuMjg1LTEuMjMgMy4yODUtMS4yMy42NDUgMS42NTMuMjQgMi44NzMuMTIgMy4xNzYuNzY1Ljg0IDEuMjMgMS45MSAxLjIzIDMuMjIgMCA0LjYxLTIuODA1IDUuNjI1LTUuNDc1IDUuOTIuNDIuMzYuODEgMS4wOTYuODEgMi4yMiAwIDEuNjA2LS4wMTUgMi44OTYtLjAxNSAzLjI4NiAwIC4zMTUuMjEuNjkuODI1LjU3QzIwLjU2NSAyMi4wOTIgMjQgMTcuNTkyIDI0IDEyLjI5N2MwLTYuNjI3LTUuMzczLTEyLTEyLTEyIiBmaWxsPSIjZmZmZmZmIj48L3BhdGg%2BPC9zdmc%2B)](https://github.com/qdykernel/Build_Oneplus_Realme_Action/stargazers)
+[![FORK](https://img.shields.io/github/forks/qdykernel/Build_Oneplus_Realme_Action?style=flat&logo=greasyfork&color=%2394E61A)](https://github.com/qdykernel/Build_Oneplus_Realme_Action/forks)
+[![TELEGRAM](https://img.shields.io/badge/Droidcess-频道-blue.svg?logo=telegram)](https://t.me/Droidcess)
+[![DISCUSSION](https://img.shields.io/badge/%E8%AE%A8%E8%AE%BA%E5%8C%BA-discussions?logo=livechat&logoColor=FFBBFF&color=3399ff)](https://github.com/qdykernel/Build_Oneplus_Realme_Action/discussions)
 
-**`简体中文`** | [English](README-en.md)<br>
+##### 
+一个更方便、快捷的自动化OPPO/一加/真我系列骁龙8Elite(SM8750)/天玑9400+(MT6991)机型的通用内核编译脚本（二创）。
+##### 
+这个项目是基于 [qdykernel/Build_Oneplus_Realme_Action](https://github.com/qdykernel/Build_Oneplus_Realme_Action) 的二次创作，在原有项目的基础上进一步扩展了以下功能：
+- 集成 **Droidspaces 容器支持**（基于 [Droidspaces-OSS](https://github.com/ravindu644/Droidspaces-OSS) 官方 kABI 补丁），使内核原生支持 DroidRun 等容器运行环境，骁龙机型勾选即用；
+- 新增 **可选上传内核 Image 镜像**功能，构建时可选择将 `Image` 文件与 AnyKernel3 卡刷包一同发布至 Release；
+- 修复 Release 发布时文件离散问题，确保每次构建产出只有一个完整的 AnyKernel3 压缩包，解压即刷。
+## 本项目的主要内容(及计划)
+- 提供 OKI（官方源码）在线云编译模式，保留官方驱动/调度，集成风驰内核驱动；
+- 基于 GitHub Actions，无需本地环境，手机浏览器即可触发编译，自动生成 AnyKernel3 卡刷包；
+- 使用 LLVM/Clang 18 进行编译，引入 ccache 缓存及大量独家编译流程优化，首次编译约 12min，二次编译约 6min；
+- 集成 Droidspaces 官方 kABI 补丁及内核配置，为骁龙机型提供原生容器运行能力；
+- 支持可选上传内核 Image 镜像，方便调试、备份或配合其他工具使用。
+## 已实现：
+- [x] 欧加真 SM8750 通用OKI内核（基于一加13/Ace5Pro源码的 6.6.56, 6.6.57, 6.6.89 等多种版本，其他同内核版本非SM8750机型可自行测试，部分机型可完全兼容）
+- [x] 欧加真 MT6991 通用OKI内核（基于一加Ace5至尊版/真我GT7源码，其他同内核版本非MT6989机型可自行测试，部分机型可完全兼容）
+- [x] 欧加真 6.6 系列内核全面移植官方风驰scx调速器，在有官方风驰内核支持的机型上可实现完整原版风驰内核调度功能
+- [x] ReSukiSU/SukiSU Ultra多版本KSU可选
+- [x] 引入ccache缓存及大量独家编译流程优化，首次编译时间约12min，二次编译时间可稳定在约6min
+- [x] 引入O2编译优化，改善内核运行性能
+- [x] lz4 1.10.0 & zstd 1.5.7 算法更新&优化补丁(来自[@ferstar](https://github.com/ferstar), 移植by [@Xiaomichael](https://github.com/Xiaomichael), 6.6版本补丁重制by [@cctv18](https://github.com/cctv18))
+- [x] [ADIOS IO调度器](https://github.com/firelzrd/adios)移植
+- [x] 加入内核防格基带保护(By [@showdo](https://github.com/showdo))，有效防止恶意格机脚本/程序对系统分区数据的破坏
+- [x] 加入Re:Kernel支持，与Freezer，NoActive等软件配合降低功耗
+- [x] 添加了对[Mountify](https://github.com/backslashxx/mountify)模块的支持
+- [x] **Droidspaces 容器支持（二创新增）**：基于 [Droidspaces-OSS](https://github.com/ravindu644/Droidspaces-OSS) 官方 kABI 补丁及推荐 GKI 配置，骁龙机型勾选即用，天玑机型待后续适配
+- [x] **可选上传 Image 镜像（二创新增）**：构建时可勾选，将编译出的 `Image` 内核文件单独上传并随 Release 发布，方便调试或配合 KernelFlasher 使用
+- [x] **修复 Release 离散问题（二创新增）**：每次构建产出统一打包为一个 `AnyKernel3_xxx.zip`，解压即标准卡刷包结构，不再出现散文件
+## 待实现：
+- [ ] 天玑 MT6991 平台 Droidspaces 测试与适配
+- [ ] LXC/Docker 功能支持
+- [ ] Nethunter 驱动移植
+- [ ] 更多自定义内核伪装选项
+- [ ] GKI 通用内核模式支持
+- 更多优化与特性移植……
+##### 
+##### 
+##### 
+## 鸣谢
+- 本项目是基于 [qdykernel/Build_Oneplus_Realme_Action](https://github.com/qdykernel/Build_Oneplus_Realme_Action) 的二次创作，在此对原作者的杰出工作致以诚挚感谢
+- ReSukiSU：[ReSukiSU/ReSukiSU](https://github.com/ReSukiSU/ReSukiSU)
+- SukiSU Ultra：[SukiSU-Ultra/SukiSU-Ultra](https://github.com/SukiSU-Ultra/SukiSU-Ultra)
+- susfs4ksu：[ShirkNeko/susfs4ksu](https://github.com/ShirkNeko/susfs4ksu)（本项目使用 cctv18 维护的 [susfs4oki](https://github.com/cctv18/susfs4oki)）
+- 风驰调度补丁：[Numbersf/SCHED_PATCH](https://github.com/Numbersf/SCHED_PATCH)
+- Droidspaces-OSS：[ravindu644/Droidspaces-OSS](https://github.com/ravindu644/Droidspaces-OSS)
+- 内核防格基带保护模块：[vc-teahouse/Baseband-guard](https://github.com/vc-teahouse/Baseband-guard)
+- 持续为本项目提供工具链和补丁支持的：[cctv18](https://github.com/cctv18)
+- 早期灵感来源：[HanKuCha/oneplus13_a5p_sukisu](https://github.com/HanKuCha/oneplus13_a5p_sukisu)
 
-[![GitHub](https://img.shields.io/badge/-GitHub|@showdo-181717?logo=github&logoColor=white&style=flat-square)](https://github.com/showdo/Build_Oneplus_Realme_Action)
-[![Telegram](https://img.shields.io/badge/Telegram-频道-blue.svg?logo=telegram)](https://t.me/Droidcess)
-[![Workflow Status](https://img.shields.io/github/actions/workflow/status/showdo/Build_Oneplus_Realme_Action/Build_oneplus_sm8750.yml?label=Build&logo=github-actions&style=flat-square)](https://github.com/showdo/Build_Oneplus_Realme_Action/actions)
-<br>
-
----
-
-## 📖 项目简介
-
-本项目是基于 **HanKuCha/cctv18 等前辈的优秀作品** 的二次创作，在原有的自动化内核编译工作流基础上，进一步拓展了对 **OnePlus** 和 **Realme** SM8750/MT6991 平台多款设备的支持。通过高度集成的脚本，实现一键编译包含 **(Re)SukiSU**、**SUSFS**、**完美风驰调度**、**Droidspaces 容器支持** 等功能的 OKI 内核，并可选择上传编译生成的 `Image` 内核镜像。
-
-### ✨ 主要特性
-
-- 🚀 **全自动化编译** - 基于 GitHub Actions，无需本地环境
-- 🔧 **多种 KSU 支持** - ReSukiSU / SukiSU-Ultra 可选
-- 📱 **多机型适配** - 支持 10 款 OnePlus/Realme 设备（骁龙 & 天玑）
-- ⚡ **性能优化** - 集成完美风驰调度补丁
-- 🐳 **Droidspaces 容器化** - 基于官方 kABI 补丁，开启容器运行能力（如 DroidRun）
-- 💾 **ccache 缓存** - 智能缓存管理，首次编译使用公共缓存提速 50%，二次编译提速 80%
-- 📤 **可选镜像上传** - 构建时可选择将内核 `Image` 文件与 AnyKernel3 包一同上传至 Release
-- 📦 **开箱即用** - 自动生成单文件 AnyKernel3 刷入包，下载即刷
-
----
-
-## 📱 支持的设备
-
-| 序号 | 设备名称 | 代号 | 平台 |
-|------|---------|------|------|
-| 1 | 一加 13 | `oneplus_13` | SM8750 |
-| 2 | 一加 Ace 5 Pro | `oneplus_ace5_pro` | SM8750 |
-| 3 | 一加 Ace 6 | `oneplus_ace_6` | SM8750 |
-| 4 | 一加 13T | `oneplus_13t` | SM8750 |
-| 5 | 一加 Pad 2 Pro | `oneplus_pad_2_pro` | SM8750 |
-| 6 | 一加 Ace5 至尊版 | `oneplus_ace5_ultra` | MT6991 |
-| 7 | 真我 GT 7 | `realme_GT7` | MT6991 |
-| 8 | 真我 GT 7 Pro | `realme_GT7pro` | SM8750 |
-| 9 | 真我 GT 7 Pro 竞速 | `realme_GT7pro_Speed` | SM8750 |
-| 10 | 真我 GT 8 | `realme_GT8` | SM8750 |
-
----
-
-## 🎯 快速开始
-
-### 方式一：GitHub Actions 云编译（推荐）
-
-#### 步骤 1. Fork 本仓库
-
-点击仓库右上角的 **Fork** 按钮，将本仓库复制到你自己的 GitHub 账户。
-
-#### 步骤 2. 运行工作流
-
-1. 进入你 Fork 的仓库
-2. 点击 **Actions** 标签页
-3. 选择对应的工作流（见下方说明）
-4. 点击 **Run workflow** 按钮
-5. 填写编译参数（可开启 Droidspaces、选择是否上传 Image 等）
-6. 等待编译完成（首次构建约12分钟）
-7. 在 **Artifacts** 或 **Release** 中下载编译产物
-
-### 📋 可用工作流
-
-| 工作流 | 说明 | 适用场景 |
-|--------|------|----------|
-| [Build_oneplus_sm8750](.github/workflows/Build_oneplus_sm8750.yml) | 完整内核编译（含 KSU/SUSFS/Droidspaces/风驰等） | 集成 KSU 获取 ROOT，支持容器化 |
-| [Build_kernel_only](.github/workflows/Build_kernel_only.yml) | 无 Root 官方源码编译 | 仅需官方内核，不集成 KSU |
-| [clean-caches](.github/workflows/clean-caches.yml) | 清理 ccache 缓存 | 缓存异常或需要重新编译时 |
-| [Clear_All_Workflow](.github/workflows/Clear_All_Workflow.yml) | 清理工作流运行记录 | 保证 Action 界面整洁 |
-
----
-
-## 🔧 高级功能
-
-### 🐳 Droidspaces 容器支持（二创新增）
-
-基于官方 Droidspaces-OSS 文档和 kABI 修复补丁，本工作流在骁龙（SM8750）设备上**原生开启容器运行所需的全部内核配置**。启用后，你的手机可以直接运行 DroidRun 等容器环境，无需额外修改内核。  
-> 天玑（MT6991）机型暂未开放 Droidspaces，后续待验证后逐步支持。
-
-### 📤 上传内核 Image（二创新增）
-
-构建时新增“上传内核镜像”选项，勾选后，独立的 `Image` 文件会随 AnyKernel3 包一起发布到 Release。方便使用 KernelFlasher 等工具手动刷写内核，或用于调试、备份。
-
-### 使用公共缓存
-
-项目会自动从 [Public_Ccache_SM8750](https://github.com/showdo/Build_Oneplus_Realme_Action/releases/tag/Public_Ccache_SM8750) 下载公共缓存，首次编译也能享受加速。
-
-### 清理旧缓存
-
-当构建时间超过 8 分钟时，会自动清理旧的 ccache 缓存，避免占用过多 GitHub 存储空间。也可手动运行 [clean-caches](.github/workflows/clean-caches.yml) 工作流清理全部缓存。
-
----
-
-### 日志分析
-
-#### 查看编译日志
-
-1. 进入 **Actions** 页面
-2. 点击对应的 workflow 运行记录
-3. 展开各个步骤查看详细输出
-4. 重点关注报错步骤
-
-#### 关键日志标记
-
-```
-
-[INFO]    - 一般信息
-[SUCCESS] - 成功完成
-[ERROR]   - 错误（需立即处理）
-
-```
-
----
-
-## 🔗 相关资源
-
-### 相关项目
-
-- [OnePlus 内核开源](https://github.com/OnePlusOSS/kernel_manifest)
-- [SukiSU-Ultra 项目](https://github.com/SukiSU-Ultra/SukiSU-Ultra)
-- [ReSukiSU 项目](https://github.com/ReSukiSU/ReSukiSU)
-- [风驰调度补丁](https://github.com/Numbersf/SCHED_PATCH)
-- [Droidspaces-OSS](https://github.com/ravindu644/Droidspaces-OSS)
-
-### 社区支持
-
-- **Telegram 频道**: [@Droidcess](https://t.me/Droidcess)
-- **GitHub Issues**: [提交问题](https://github.com/showdo/Build_Oneplus_Realme_Action/issues)
-
-### 感谢
-
-本项目是**二次创作**，核心灵感与初始代码源自：
-- [HanKuCha](https://github.com/HanKuCha/oneplus13_a5p_sukisu)
-- [cctv18](https://github.com/cctv18) - 工具链和补丁支持
-并在此基础上新增了 **Droidspaces 容器化编译**、**Image 可选上传**等功能。
-
----
-
-## 📜 许可证
-
-本项目采用 **GPL-3.0** 许可证。
-
-```
-
-Copyright (C) 2024 showdo
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see .
-
-```
-
----
-
-## 📈 项目统计
-
-[![Star History Chart](https://api.star-history.com/svg?repos=showdo/Build_Oneplus_Realme_Action&type=Date)](https://star-history.com/#showdo/Build_Oneplus_Realme_Action&Date)
-
----
-
-## 📞 联系方式
-
-如有问题或建议，请通过以下方式联系：
-
-- **Telegram**: [https://t.me/Droidcess](https://t.me/Droidcess)
-- **GitHub Issues**: [新建 Issue](https://github.com/showdo/Build_Oneplus_Realme_Action/issues)
-
----
-**维护状态**: 🟢 活跃维护中
-```
+<!-- 这是一个访客统计，用来看看我的项目主页有多少人访问过 -->
+<div align="center">
+  <img width="0" height="0" src="https://count.getloli.com/get/@:qdykernel" />
+</div>
